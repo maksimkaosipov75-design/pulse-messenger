@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use crate::models::*;
 
-const CHUNK_SIZE: usize = 64 * 1024; // 64KB
+const CHUNK_SIZE: usize = 1024 * 1024; // 1MB, fewer concurrent streams per file
 
 /// Metadata plus the chunk slots received so far
 type IncomingTransfer = (FileMetadata, Vec<Option<Vec<u8>>>);

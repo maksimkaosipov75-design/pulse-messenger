@@ -141,14 +141,15 @@ pub enum AckStatus {
     Failed(String),
 }
 
-/// Serialize a protocol message to bytes (JSON)
+/// Serialize a protocol message to bytes (bincode: binary chunks must
+/// not inflate 4-5x the way JSON number arrays do)
 pub fn encode_message(msg: &ProtocolMessage) -> Result<Vec<u8>, String> {
-    serde_json::to_vec(msg).map_err(|e| e.to_string())
+    bincode::serialize(msg).map_err(|e| e.to_string())
 }
 
-/// Deserialize a protocol message from bytes (JSON)
+/// Deserialize a protocol message from bytes
 pub fn decode_message(data: &[u8]) -> Result<ProtocolMessage, String> {
-    serde_json::from_slice(data).map_err(|e| format!("Decode error: {}", e))
+    bincode::deserialize(data).map_err(|e| format!("Decode error: {}", e))
 }
 
 #[cfg(test)]

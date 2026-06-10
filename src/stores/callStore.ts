@@ -40,6 +40,11 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   durationTimer: null,
 
   startCall: async (chatId, peerId, peerName, callType, callerId, callerName) => {
+    if (typeof RTCPeerConnection === 'undefined') {
+      const { default: i18n } = await import('@/i18n');
+      toast.error(i18n.t('call.unsupported'));
+      return;
+    }
     try {
       await webrtcService.startCall(chatId, peerId, peerName, callType, callerId, callerName);
     } catch (e) {
@@ -50,6 +55,13 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   acceptCall: async () => {
+    if (typeof RTCPeerConnection === 'undefined') {
+      const { default: i18n } = await import('@/i18n');
+      toast.error(i18n.t('call.unsupported'));
+      await webrtcService.rejectCall().catch(() => {});
+      set({ callState: 'idle', callInfo: null });
+      return;
+    }
     try {
       await webrtcService.acceptCall();
     } catch (e) {

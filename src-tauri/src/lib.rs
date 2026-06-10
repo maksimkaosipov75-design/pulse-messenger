@@ -1006,43 +1006,55 @@ fn send_file_common(
     let offer_data = encode_message(&offer)?;
     let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
 
-    {
+    let tx = {
         let cmd = command_tx.lock().map_err(|e| e.to_string())?;
-        let tx = cmd.as_ref().ok_or("Network not started")?;
-        tx.send(NetworkCommand::SendMessage {
-            message_id: None,
-            peer_id,
-            data: offer_data,
-        })
-        .map_err(|e| e.to_string())?;
+        cmd.as_ref().ok_or("Network not started")?.clone()
+    };
+    tx.send(NetworkCommand::SendMessage {
+        message_id: None,
+        peer_id,
+        data: offer_data,
+    })
+    .map_err(|e| e.to_string())?;
 
-        // Send chunks
-        for (i, chunk_data) in chunks.iter().enumerate() {
-            let chunk_msg = ProtocolMessage::FileChunk {
+    // Pace the chunks from a background task: firing them all at once
+    // exhausts yamux's stream limit and kills the whole connection
+    {
+        let message_id = message_id.clone();
+        let chunks = chunks.clone();
+        tokio::spawn(async move {
+            for (i, chunk_data) in chunks.into_iter().enumerate() {
+                let chunk_msg = ProtocolMessage::FileChunk {
+                    message_id: message_id.clone(),
+                    chunk_index: i as u32,
+                    data: chunk_data,
+                };
+                let Ok(chunk_bytes) = encode_message(&chunk_msg) else {
+                    return;
+                };
+                if tx
+                    .send(NetworkCommand::SendMessage {
+                        message_id: None,
+                        peer_id,
+                        data: chunk_bytes,
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+            let complete = ProtocolMessage::FileComplete {
                 message_id: message_id.clone(),
-                chunk_index: i as u32,
-                data: chunk_data.clone(),
             };
-            let chunk_bytes = encode_message(&chunk_msg)?;
-            tx.send(NetworkCommand::SendMessage {
-                message_id: None,
-                peer_id,
-                data: chunk_bytes,
-            })
-            .map_err(|e| e.to_string())?;
-        }
-
-        // Send FileComplete
-        let complete = ProtocolMessage::FileComplete {
-            message_id: message_id.clone(),
-        };
-        let complete_data = encode_message(&complete)?;
-        tx.send(NetworkCommand::SendMessage {
-            message_id: None,
-            peer_id,
-            data: complete_data,
-        })
-        .map_err(|e| e.to_string())?;
+            if let Ok(complete_data) = encode_message(&complete) {
+                let _ = tx.send(NetworkCommand::SendMessage {
+                    message_id: None,
+                    peer_id,
+                    data: complete_data,
+                });
+            }
+        });
     }
 
     // Save locally — store the file in our file storage
@@ -2023,6 +2035,9 @@ fn finalize_incoming_file(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // RUST_LOG=info pulse-messenger -> network/transfer diagnostics
+    let _ = env_logger::try_init();
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

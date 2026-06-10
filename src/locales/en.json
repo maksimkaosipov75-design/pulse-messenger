@@ -188,7 +188,8 @@
     "speakerOff": "Speaker off",
     "end": "End call",
     "incomingAudio": "Incoming audio call...",
-    "incomingVideo": "Incoming video call..."
+    "incomingVideo": "Incoming video call...",
+    "unsupported": "Calls are not supported here: this system WebKit build lacks WebRTC"
   },
   "file": {
     "download": "Download",
