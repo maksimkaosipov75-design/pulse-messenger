@@ -151,7 +151,9 @@
     "copied": "Copied",
     "peerId": "Your Peer ID",
     "connectToPeer": "Connect to peer",
-    "addressPlaceholder": "Peer multiaddr"
+    "addressPlaceholder": "Peer multiaddr",
+    "offlineBanner": "No network connection",
+    "reconnect": "Reconnect"
   },
   "call": {
     "audio": "Audio call",
@@ -183,7 +185,9 @@
   "error": {
     "generic": "An error occurred",
     "network": "Network error",
-    "sendFailed": "Failed to send message"
+    "sendFailed": "Failed to send message",
+    "retrying": "Connection problem, retrying…",
+    "loadFailed": "Failed to load data"
   },
   "theme": {
     "telegram": "Telegram",

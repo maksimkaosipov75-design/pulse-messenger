@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { Chat, Message } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invokeWithRetry, formatError } from '@/services/api';
+import { toast } from '@/stores/toastStore';
 
 interface ChatState {
   chats: Chat[];
@@ -38,24 +40,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadChats: async () => {
     set({ isLoadingChats: true, error: null });
     try {
-      const chats = await invoke<Chat[]>('get_chats');
+      const chats = await invokeWithRetry<Chat[]>('get_chats');
       set({ chats, isLoadingChats: false });
     } catch (error) {
-      set({ error: String(error), isLoadingChats: false });
+      set({ error: formatError(error), isLoadingChats: false });
     }
   },
 
   loadMessages: async (chatId: string, limit = 50, before?: string) => {
     set({ isLoadingMessages: true, error: null });
     try {
-      const messages = await invoke<Message[]>('get_messages', {
+      const messages = await invokeWithRetry<Message[]>('get_messages', {
         chatId,
         limit,
         before: before ?? null,
       });
       set({ messages, isLoadingMessages: false });
     } catch (error) {
-      set({ error: String(error), isLoadingMessages: false });
+      set({ error: formatError(error), isLoadingMessages: false });
     }
   },
 
@@ -65,7 +67,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const oldest = messages[messages.length - 1];
     try {
-      const older = await invoke<Message[]>('get_messages', {
+      const older = await invokeWithRetry<Message[]>('get_messages', {
         chatId: currentChat.id,
         limit: 50,
         before: oldest.timestamp,
@@ -74,7 +76,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({ messages: [...messages, ...older] });
       }
     } catch (error) {
-      set({ error: String(error) });
+      set({ error: formatError(error) });
     }
   },
 
@@ -103,7 +105,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
       return message;
     } catch (error) {
-      set({ error: String(error) });
+      toast.error(formatError(error));
+      set({ error: formatError(error) });
       throw error;
     }
   },
@@ -125,7 +128,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
       return message;
     } catch (error) {
-      set({ error: String(error) });
+      toast.error(formatError(error));
+      set({ error: formatError(error) });
       throw error;
     }
   },
@@ -137,7 +141,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: state.messages.filter((m) => m.id !== messageId),
       }));
     } catch (error) {
-      set({ error: String(error) });
+      toast.error(formatError(error));
+      set({ error: formatError(error) });
     }
   },
 
@@ -153,7 +158,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }));
       return chat;
     } catch (error) {
-      set({ error: String(error) });
+      toast.error(formatError(error));
+      set({ error: formatError(error) });
       throw error;
     }
   },
@@ -167,7 +173,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: state.currentChat?.id === chatId ? [] : state.messages,
       }));
     } catch (error) {
-      set({ error: String(error) });
+      toast.error(formatError(error));
+      set({ error: formatError(error) });
     }
   },
 

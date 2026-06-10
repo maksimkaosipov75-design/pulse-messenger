@@ -151,7 +151,9 @@
     "copied": "Скопировано",
     "peerId": "Ваш Peer ID",
     "connectToPeer": "Подключиться к пиру",
-    "addressPlaceholder": "Multiaddr пира"
+    "addressPlaceholder": "Multiaddr пира",
+    "offlineBanner": "Нет подключения к сети",
+    "reconnect": "Переподключиться"
   },
   "call": {
     "audio": "Аудиозвонок",
@@ -183,7 +185,9 @@
   "error": {
     "generic": "Произошла ошибка",
     "network": "Ошибка сети",
-    "sendFailed": "Не удалось отправить сообщение"
+    "sendFailed": "Не удалось отправить сообщение",
+    "retrying": "Проблема с соединением, повторяю…",
+    "loadFailed": "Не удалось загрузить данные"
   },
   "theme": {
     "telegram": "Telegram",

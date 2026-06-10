@@ -22,6 +22,8 @@ import { ActiveCallView } from './components/call/ActiveCallView';
 import { SearchPanel } from './components/search/SearchPanel';
 import { useSearchStore } from './stores/searchStore';
 import { useIsMobile } from './hooks/useIsMobile';
+import { Toasts } from './components/Toasts';
+import { OfflineBanner } from './components/OfflineBanner';
 
 /** Handle Android system back button */
 function AndroidBackHandler() {
@@ -70,6 +72,7 @@ function AppLayout() {
   if (isMobile) {
     return (
       <div className="flex flex-col h-screen overflow-hidden safe-area-top safe-area-bottom">
+        <OfflineBanner />
         <div className="flex-1 min-h-0">
           <Routes>
             <Route
@@ -99,7 +102,9 @@ function AppLayout() {
 
   // Desktop: side-by-side layout
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
+      <OfflineBanner />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
       <Sidebar />
       <Routes>
         <Route
@@ -122,6 +127,7 @@ function AppLayout() {
       <IncomingCallDialog />
       <OutgoingCallView />
       <ActiveCallView />
+      </div>
     </div>
   );
 }
@@ -183,6 +189,7 @@ function App() {
       <BrowserRouter>
         <AndroidBackHandler />
         {isSetup ? <AppLayout /> : <ProfileSetupPage />}
+        <Toasts />
       </BrowserRouter>
     </ThemeProvider>
   );
