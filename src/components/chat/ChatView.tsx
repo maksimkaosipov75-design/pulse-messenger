@@ -52,10 +52,12 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
     }
   }, [currentChat?.id]);
 
-  // Peer mapping is needed to route messages for 1:1 chats
+  // Peer mapping is needed to route messages for 1:1 chats. Refresh on
+  // every chat switch: mappings appear at runtime (incoming messages
+  // register new senders in the backend).
   useEffect(() => {
-    if (Object.keys(peerIdentities).length === 0) loadPeerIdentities();
-  }, []);
+    loadPeerIdentities();
+  }, [currentChat?.id]);
 
   // Close context menu on outside click
   useEffect(() => {

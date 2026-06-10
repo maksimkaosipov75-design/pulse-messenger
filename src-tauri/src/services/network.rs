@@ -257,7 +257,11 @@ pub async fn start_network(
             })
         })
         .map_err(|e| format!("{:?}", e))?
-        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
+        // Long idle timeout: connections double as presence — peers stay
+        // "online" instead of dropping after a minute of silence
+        .with_swarm_config(|cfg| {
+            cfg.with_idle_connection_timeout(Duration::from_secs(24 * 60 * 60))
+        })
         .build();
 
     let addr: Multiaddr = listen_addr

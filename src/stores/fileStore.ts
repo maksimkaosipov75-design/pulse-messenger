@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Message } from '@/types';
 import i18n from '../i18n';
+import { toast } from '@/stores/toastStore';
+import { formatError } from '@/services/api';
 
 interface FileTransfer {
   messageId: string;
@@ -108,7 +111,22 @@ export const useFileStore = create<FileState>((set, get) => ({
       title: i18n.t('chat.selectFile'),
     });
     if (!filePath) return null;
-    return get().sendFileFromPath(chatId, toPeer, filePath as string);
+    try {
+      // Read through the fs plugin: Android returns content:// URIs
+      // that the backend's std::fs cannot open
+      const data = await readFile(filePath as string);
+      const fileName =
+        (filePath as string).split(/[/\\]/).pop()?.split('?')[0] || 'file';
+      return await invoke<Message>('send_file_data', {
+        chatId,
+        toPeer,
+        fileName,
+        data: Array.from(data),
+      });
+    } catch (e) {
+      toast.error(formatError(e));
+      return null;
+    }
   },
 
   sendFileFromPath: async (chatId, toPeer, filePath) => {

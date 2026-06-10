@@ -145,6 +145,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         import('@/stores/chatStore').then(({ useChatStore }) =>
           useChatStore.getState().flushOutbox()
         );
+        // New connections may carry new user->peer mappings
+        import('@/stores/contactsStore').then(({ useContactsStore }) =>
+          useContactsStore.getState().loadPeerIdentities()
+        );
       }
 
       if (data.peerDisconnected) {

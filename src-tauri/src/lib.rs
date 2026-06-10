@@ -636,6 +636,18 @@ fn add_contact_by_code(
         }
     }
 
+    // A reinstalled device gets a fresh identity: replace the stale
+    // contact with the same username instead of piling up duplicates
+    if let Ok(existing) = state.get_contacts() {
+        for old in existing
+            .iter()
+            .filter(|c| c.user.username == parsed.username && c.user.id != parsed.id)
+        {
+            let _ = state.delete_peer_identity(&old.user.id);
+            let _ = state.delete_contact(&old.user.id);
+        }
+    }
+
     let contact = Contact {
         user: User {
             id: parsed.id.clone(),
@@ -860,16 +872,64 @@ async fn send_file_message(
     state: tauri::State<'_, std::sync::Arc<StorageService>>,
     file_service: tauri::State<'_, FileTransferService>,
     command_tx: tauri::State<'_, std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
-    _encryption: tauri::State<'_, EncryptionService>,
     chat_id: String,
     to_peer: String,
     file_path: String,
+) -> Result<Message, String> {
+    let path = std::path::Path::new(&file_path);
+    let data = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    send_file_common(
+        &state,
+        &file_service,
+        &command_tx,
+        chat_id,
+        to_peer,
+        file_name,
+        data,
+    )
+}
+
+/// Same as send_file_message but takes the bytes directly — Android
+/// content:// URIs have no path std::fs can read
+#[tauri::command]
+async fn send_file_data(
+    state: tauri::State<'_, std::sync::Arc<StorageService>>,
+    file_service: tauri::State<'_, FileTransferService>,
+    command_tx: tauri::State<'_, std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
+    chat_id: String,
+    to_peer: String,
+    file_name: String,
+    data: Vec<u8>,
+) -> Result<Message, String> {
+    send_file_common(
+        &state,
+        &file_service,
+        &command_tx,
+        chat_id,
+        to_peer,
+        file_name,
+        data,
+    )
+}
+
+fn send_file_common(
+    state: &StorageService,
+    file_service: &FileTransferService,
+    command_tx: &std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>,
+    chat_id: String,
+    to_peer: String,
+    file_name: String,
+    data: Vec<u8>,
 ) -> Result<Message, String> {
     let user = state
         .get_user_profile()?
         .ok_or("User profile not created")?;
 
-    let (metadata, chunks) = file_service.chunk_file(&file_path)?;
+    let (metadata, chunks) = file_service.chunk_bytes(&file_name, data.clone())?;
     let message_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now();
 
@@ -904,28 +964,22 @@ async fn send_file_message(
 
     {
         let cmd = command_tx.lock().map_err(|e| e.to_string())?;
-        if let Some(tx) = cmd.as_ref() {
-            tx.send(NetworkCommand::SendMessage {
-                message_id: None,
-                peer_id,
-                data: offer_data,
-            })
-            .map_err(|e| e.to_string())?;
-        } else {
-            return Err("Network not started".to_string());
-        }
-    }
+        let tx = cmd.as_ref().ok_or("Network not started")?;
+        tx.send(NetworkCommand::SendMessage {
+            message_id: None,
+            peer_id,
+            data: offer_data,
+        })
+        .map_err(|e| e.to_string())?;
 
-    // Send chunks
-    for (i, chunk_data) in chunks.iter().enumerate() {
-        let chunk_msg = ProtocolMessage::FileChunk {
-            message_id: message_id.clone(),
-            chunk_index: i as u32,
-            data: chunk_data.clone(),
-        };
-        let chunk_bytes = encode_message(&chunk_msg)?;
-        let cmd = command_tx.lock().map_err(|e| e.to_string())?;
-        if let Some(tx) = cmd.as_ref() {
+        // Send chunks
+        for (i, chunk_data) in chunks.iter().enumerate() {
+            let chunk_msg = ProtocolMessage::FileChunk {
+                message_id: message_id.clone(),
+                chunk_index: i as u32,
+                data: chunk_data.clone(),
+            };
+            let chunk_bytes = encode_message(&chunk_msg)?;
             tx.send(NetworkCommand::SendMessage {
                 message_id: None,
                 peer_id,
@@ -933,31 +987,22 @@ async fn send_file_message(
             })
             .map_err(|e| e.to_string())?;
         }
-    }
 
-    // Send FileComplete
-    let complete = ProtocolMessage::FileComplete {
-        message_id: message_id.clone(),
-    };
-    let complete_data = encode_message(&complete)?;
-    {
-        let cmd = command_tx.lock().map_err(|e| e.to_string())?;
-        if let Some(tx) = cmd.as_ref() {
-            tx.send(NetworkCommand::SendMessage {
-                message_id: None,
-                peer_id,
-                data: complete_data,
-            })
-            .map_err(|e| e.to_string())?;
-        }
+        // Send FileComplete
+        let complete = ProtocolMessage::FileComplete {
+            message_id: message_id.clone(),
+        };
+        let complete_data = encode_message(&complete)?;
+        tx.send(NetworkCommand::SendMessage {
+            message_id: None,
+            peer_id,
+            data: complete_data,
+        })
+        .map_err(|e| e.to_string())?;
     }
 
     // Save locally — store the file in our file storage
-    let local_path = file_service.save_file(
-        &message_id,
-        &metadata.file_name,
-        &std::fs::read(&file_path).map_err(|e| e.to_string())?,
-    )?;
+    let local_path = file_service.save_file(&message_id, &metadata.file_name, &data)?;
 
     let message = Message {
         id: message_id,
@@ -1426,6 +1471,23 @@ async fn start_network(
                         }
 
                         let _ = app_handle.emit("incoming-message", &msg);
+
+                        // Native notification from the backend: fires even
+                        // when the webview is backgrounded (Android) where
+                        // JS-side notifications never run
+                        let focused = app_handle
+                            .get_webview_window("main")
+                            .and_then(|w| w.is_focused().ok())
+                            .unwrap_or(false);
+                        if !focused {
+                            use tauri_plugin_notification::NotificationExt;
+                            let _ = app_handle
+                                .notification()
+                                .builder()
+                                .title(&envelope.sender_name)
+                                .body(&envelope.content)
+                                .show();
+                        }
                     }
                     Ok(ProtocolMessage::KeyExchange {
                         chat_id,
@@ -1804,6 +1866,30 @@ pub fn run() {
             ));
             app.manage(std::sync::Mutex::new(initial_user));
 
+            // WebKitGTK denies getUserMedia by default — wry has no Linux
+            // permission handler, so calls/voice need an explicit allow
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.with_webview(|webview| {
+                    use webkit2gtk::glib::object::Cast;
+                    use webkit2gtk::{PermissionRequestExt, WebViewExt};
+                    let wv = webview.inner();
+                    wv.connect_permission_request(|_, request| {
+                        if request
+                            .downcast_ref::<webkit2gtk::UserMediaPermissionRequest>()
+                            .is_some()
+                            || request
+                                .downcast_ref::<webkit2gtk::DeviceInfoPermissionRequest>()
+                                .is_some()
+                        {
+                            request.allow();
+                            return true;
+                        }
+                        false
+                    });
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1852,6 +1938,7 @@ pub fn run() {
             get_local_peer_id,
             stop_network,
             send_file_message,
+            send_file_data,
             get_file_path,
             save_file_to_downloads,
             write_temp_file,

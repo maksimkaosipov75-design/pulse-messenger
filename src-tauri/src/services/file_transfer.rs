@@ -29,16 +29,15 @@ impl FileTransferService {
         })
     }
 
-    /// Read a file from disk and split into chunks
-    pub fn chunk_file(&self, file_path: &str) -> Result<(FileMetadata, Vec<Vec<u8>>), String> {
-        let path = std::path::Path::new(file_path);
-        let data = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+    /// Split in-memory data into chunks (Android content:// URIs have no
+    /// filesystem path — the frontend reads them and sends bytes)
+    pub fn chunk_bytes(
+        &self,
+        file_name: &str,
+        data: Vec<u8>,
+    ) -> Result<(FileMetadata, Vec<Vec<u8>>), String> {
         let file_size = data.len() as u64;
-        let file_name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "unknown".to_string());
-        let ext = path
+        let ext = std::path::Path::new(file_name)
             .extension()
             .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default();
@@ -54,7 +53,7 @@ impl FileTransferService {
         let chunks: Vec<Vec<u8>> = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
 
         let metadata = FileMetadata {
-            file_name,
+            file_name: file_name.to_string(),
             file_size,
             mime_type,
             chunk_count,
@@ -203,10 +202,8 @@ mod tests {
         let data: Vec<u8> = (0..CHUNK_SIZE * 2 + CHUNK_SIZE / 2)
             .map(|i| (i % 251) as u8)
             .collect();
-        let src = dir.path().join("input.bin");
-        std::fs::write(&src, &data).unwrap();
 
-        let (metadata, chunks) = svc.chunk_file(src.to_str().unwrap()).unwrap();
+        let (metadata, chunks) = svc.chunk_bytes("input.bin", data.clone()).unwrap();
         assert_eq!(metadata.chunk_count, 3);
         assert_eq!(metadata.file_size, data.len() as u64);
         assert_eq!(chunks.len(), 3);

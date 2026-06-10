@@ -33,24 +33,6 @@ export async function setupMessageNotifications() {
   unlisteners = [];
 
   unlisteners.push(
-    await listen<{ chatId: string; senderName: string; content: string; messageType: string }>(
-      'incoming-message',
-      (event) => {
-        const { senderName, content, messageType } = event.payload;
-        if (document.hasFocus()) return;
-
-        let body = content || '';
-        if (messageType === 'image') body = `📷 ${i18n.t('chat.msgPhoto')}`;
-        else if (messageType === 'file') body = `📎 ${i18n.t('chat.msgFile')}`;
-        else if (messageType === 'voice') body = `🎤 ${i18n.t('chat.msgVoice')}`;
-        else if (messageType === 'video') body = `🎬 ${i18n.t('chat.msgVideo')}`;
-
-        notify(senderName || i18n.t('chat.newMessage'), body);
-      }
-    )
-  );
-
-  unlisteners.push(
     await listen<{ callId: string; callerName: string; callType: string }>(
       'call-offer',
       (event) => {

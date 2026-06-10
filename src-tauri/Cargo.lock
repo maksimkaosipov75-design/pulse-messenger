@@ -4334,6 +4334,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
+ "webkit2gtk",
  "x25519-dalek",
 ]
 
