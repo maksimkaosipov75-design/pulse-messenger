@@ -594,6 +594,33 @@ fn block_contact(
     Ok(())
 }
 
+// === Native audio calls (PCM over libp2p) ===
+
+#[tauri::command]
+fn native_call_start_audio(
+    call_audio: tauri::State<CallAudioService>,
+    command_tx: tauri::State<std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
+    call_id: String,
+    to_peer: String,
+) -> Result<(), String> {
+    let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
+    let net = {
+        let cmd = command_tx.lock().map_err(|e| e.to_string())?;
+        cmd.as_ref().ok_or("Network not started")?.clone()
+    };
+    call_audio.start(&call_id, peer_id, net)
+}
+
+#[tauri::command]
+fn native_call_stop(call_audio: tauri::State<CallAudioService>) -> Result<(), String> {
+    call_audio.stop()
+}
+
+#[tauri::command]
+fn native_call_mute(call_audio: tauri::State<CallAudioService>, muted: bool) -> Result<(), String> {
+    call_audio.set_muted(muted)
+}
+
 // === Identity codes (QR / copyable contact bundles) ===
 
 /// Payload encoded into a "pulse code": everything needed to add a
@@ -1835,6 +1862,11 @@ async fn start_network(
                             }),
                         );
                     }
+                    Ok(ProtocolMessage::CallAudio { call_id, data, .. }) => {
+                        if let Some(audio) = app_handle.try_state::<CallAudioService>() {
+                            audio.play_frame(&call_id, &data);
+                        }
+                    }
                     Ok(ProtocolMessage::CallReject { call_id }) => {
                         log::info!("Call rejected: {}", call_id);
                         let _ = app_handle.emit(
@@ -2074,6 +2106,7 @@ pub fn run() {
                 None::<mpsc::UnboundedSender<NetworkCommand>>,
             ));
             app.manage(std::sync::Mutex::new(initial_user));
+            app.manage(CallAudioService::new());
 
             // WebKitGTK denies getUserMedia by default — wry has no Linux
             // permission handler, so calls/voice need an explicit allow
@@ -2129,6 +2162,9 @@ pub fn run() {
             add_contact,
             remove_contact,
             block_contact,
+            native_call_start_audio,
+            native_call_stop,
+            native_call_mute,
             get_my_contact_code,
             add_contact_by_code,
             get_peer_identities,

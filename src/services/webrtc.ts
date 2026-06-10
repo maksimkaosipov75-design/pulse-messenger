@@ -40,7 +40,12 @@ export interface CallInfo {
   peerName: string;
   callType: CallType;
   isOutgoing: boolean;
+  /** Audio over libp2p (Rust backend) instead of browser WebRTC */
+  native?: boolean;
 }
+
+/** SDP marker for the native PCM-over-libp2p audio path */
+const NATIVE_SDP = 'native-pcm16';
 
 type CallEventCallback = (event: string, data: unknown) => void;
 
@@ -52,6 +57,7 @@ class WebRTCService {
   private eventListeners: UnlistenFn[] = [];
   private onEvent: CallEventCallback | null = null;
   private iceCandidateQueue: RTCIceCandidateInit[] = [];
+  private nativeMuted = false;
 
   setEventCallback(cb: CallEventCallback) {
     this.onEvent = cb;
@@ -64,6 +70,9 @@ class WebRTCService {
   async startCall(chatId: string, peerId: string, peerName: string, callType: CallType, callerId: string, callerName: string): Promise<string> {
     const callId = crypto.randomUUID();
 
+    // Audio calls run natively over libp2p on every platform —
+    // WebKitGTK has no WebRTC, and one path beats two
+    const native = callType === 'audio';
     this.currentCall = {
       callId,
       chatId,
@@ -71,16 +80,18 @@ class WebRTCService {
       peerName,
       callType,
       isOutgoing: true,
+      native,
     };
 
-    await this.setupMedia(callType);
-    this.createPeerConnection();
+    let sdp: string | undefined = NATIVE_SDP;
+    if (!native) {
+      await this.setupMedia(callType);
+      this.createPeerConnection();
+      const offer = await this.peerConnection!.createOffer();
+      await this.peerConnection!.setLocalDescription(offer);
+      sdp = offer.sdp;
+    }
 
-    // Create offer
-    const offer = await this.peerConnection!.createOffer();
-    await this.peerConnection!.setLocalDescription(offer);
-
-    // Send offer via Tauri
     await invoke('send_call_offer', {
       callId,
       chatId,
@@ -88,7 +99,7 @@ class WebRTCService {
       callerName,
       calleeId: peerId,
       callType,
-      sdp: offer.sdp,
+      sdp,
     });
 
     this.emit('call-state', { state: 'outgoing-ringing', callInfo: this.currentCall });
@@ -103,6 +114,7 @@ class WebRTCService {
       peerName: callerName,
       callType,
       isOutgoing: false,
+      native: sdp === NATIVE_SDP,
     };
 
     this.emit('incoming-call', { callInfo: this.currentCall, sdp });
@@ -114,6 +126,21 @@ class WebRTCService {
 
   async acceptCall(): Promise<void> {
     if (!this.currentCall) throw new Error('No active call');
+
+    if (this.currentCall.native) {
+      await invoke('send_call_answer', {
+        callId: this.currentCall.callId,
+        callerId: this.currentCall.peerId,
+        sdp: NATIVE_SDP,
+      });
+      await invoke('native_call_start_audio', {
+        callId: this.currentCall.callId,
+        toPeer: this.currentCall.peerId,
+      });
+      this.nativeMuted = false;
+      this.emit('call-state', { state: 'connected', callInfo: this.currentCall });
+      return;
+    }
 
     const sdp = (this as unknown as Record<string, unknown>)._pendingOfferSdp as string;
     if (!sdp) throw new Error('No pending offer');
@@ -147,6 +174,15 @@ class WebRTCService {
   }
 
   async handleAnswer(sdp: string) {
+    if (this.currentCall?.native && sdp === NATIVE_SDP) {
+      await invoke('native_call_start_audio', {
+        callId: this.currentCall.callId,
+        toPeer: this.currentCall.peerId,
+      });
+      this.nativeMuted = false;
+      this.emit('call-state', { state: 'connected', callInfo: this.currentCall });
+      return;
+    }
     if (!this.peerConnection) return;
 
     await this.peerConnection.setRemoteDescription({
@@ -211,6 +247,11 @@ class WebRTCService {
   }
 
   toggleMuteAudio(): boolean {
+    if (this.currentCall?.native) {
+      this.nativeMuted = !this.nativeMuted;
+      void invoke('native_call_mute', { muted: this.nativeMuted }).catch(() => {});
+      return this.nativeMuted;
+    }
     if (!this.localStream) return false;
     const audioTrack = this.localStream.getAudioTracks()[0];
     if (audioTrack) {
@@ -378,6 +419,9 @@ class WebRTCService {
   }
 
   private cleanup() {
+    if (this.currentCall?.native) {
+      void invoke('native_call_stop').catch(() => {});
+    }
     if (this.localStream) {
       this.localStream.getTracks().forEach((t) => t.stop());
       this.localStream = null;

@@ -132,6 +132,11 @@ pub enum NetworkEvent {
 // === Commands ===
 
 pub enum NetworkCommand {
+    /// Fire-and-forget realtime data (call audio): no ack, no retry
+    SendTransient {
+        peer_id: PeerId,
+        data: Vec<u8>,
+    },
     SendMessage {
         peer_id: PeerId,
         data: Vec<u8>,
@@ -331,6 +336,9 @@ pub async fn start_network(
                 }
                 cmd = command_rx.recv() => {
                     match cmd {
+                        Some(NetworkCommand::SendTransient { peer_id, data }) => {
+                            swarm.behaviour_mut().request_response.send_request(&peer_id, data);
+                        }
                         Some(NetworkCommand::SendMessage { peer_id, data, message_id }) => {
                             log::info!("Sending message to {}: {} bytes", peer_id, data.len());
                             let req_id = swarm.behaviour_mut().request_response.send_request(&peer_id, data.clone());

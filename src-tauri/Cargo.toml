@@ -57,6 +57,8 @@ async-trait = "0.1"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 base64 = "0.22"
+cpal = "0.18.1"
+ringbuf = "0.5.0"
 
 [features]
 default = ["custom-protocol"]

@@ -40,7 +40,8 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   durationTimer: null,
 
   startCall: async (chatId, peerId, peerName, callType, callerId, callerName) => {
-    if (typeof RTCPeerConnection === 'undefined') {
+    // Audio runs natively; only browser-WebRTC video needs the engine
+    if (callType === 'video' && typeof RTCPeerConnection === 'undefined') {
       const { default: i18n } = await import('@/i18n');
       toast.error(i18n.t('call.unsupported'));
       return;
@@ -55,7 +56,8 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   },
 
   acceptCall: async () => {
-    if (typeof RTCPeerConnection === 'undefined') {
+    const info = webrtcService.getCurrentCall();
+    if (!info?.native && typeof RTCPeerConnection === 'undefined') {
       const { default: i18n } = await import('@/i18n');
       toast.error(i18n.t('call.unsupported'));
       await webrtcService.rejectCall().catch(() => {});

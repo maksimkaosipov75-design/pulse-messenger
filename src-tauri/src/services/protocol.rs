@@ -93,6 +93,12 @@ pub enum ProtocolMessage {
     CallReject {
         call_id: String,
     },
+    /// Native call media: 16kHz mono PCM16, 20ms frames
+    CallAudio {
+        call_id: String,
+        seq: u32,
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

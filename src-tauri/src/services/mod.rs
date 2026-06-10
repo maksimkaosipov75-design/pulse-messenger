@@ -1,3 +1,4 @@
+mod call_audio;
 mod encryption;
 mod file_transfer;
 mod group_chat;
@@ -6,6 +7,7 @@ mod network;
 mod protocol;
 mod storage;
 
+pub use call_audio::*;
 pub use encryption::*;
 pub use file_transfer::*;
 pub use group_chat::*;
