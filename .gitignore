@@ -4,7 +4,13 @@ node_modules/
 # Build outputs
 dist/
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/schemas/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/src/main/java/com/pulse/messenger/generated/
+src-tauri/gen/android/app/tauri.properties
+src-tauri/gen/android/local.properties
 
 # Local data / secrets — never commit keys
 *.key
@@ -17,3 +23,6 @@ src-tauri/gen/
 .idea/
 .DS_Store
 *.log
+
+# Android signing
+keystore.properties
