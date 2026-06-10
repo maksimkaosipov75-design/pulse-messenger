@@ -29,6 +29,7 @@ enum AudioCmd {
 pub struct CallAudioService {
     tx: Mutex<mpsc::Sender<AudioCmd>>,
     active_call: Mutex<Option<String>>,
+    frames_received: std::sync::atomic::AtomicU64,
 }
 
 impl CallAudioService {
@@ -41,6 +42,7 @@ impl CallAudioService {
         Self {
             tx: Mutex::new(tx),
             active_call: Mutex::new(None),
+            frames_received: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -67,6 +69,10 @@ impl CallAudioService {
             .chunks_exact(2)
             .map(|b| i16::from_le_bytes([b[0], b[1]]))
             .collect();
+        let n = self.frames_received.fetch_add(1, Ordering::Relaxed);
+        if n.is_multiple_of(250) {
+            log::info!("Call audio: {} frames received", n);
+        }
         let _ = self.send(AudioCmd::Frame(samples));
     }
 
@@ -164,77 +170,155 @@ fn build_streams(
     let rb = HeapRb::<i16>::new(CALL_SAMPLE_RATE as usize * 2);
     let (prod, mut cons) = rb.split();
 
-    // --- Capture: native rate mono f32 -> 16k PCM16 frames over the wire
+    // --- Capture: native rate mono -> 16k PCM16 frames over the wire.
+    // Sample format depends on the platform (AAudio gives i16), so the
+    // callback converts everything to f32 first.
     let mut pending: Vec<f32> = Vec::new();
     let mut seq: u32 = 0;
     let ratio_in = in_rate / CALL_SAMPLE_RATE as f64;
-    let input_stream = input_device
-        .build_input_stream(
-            in_config.into(),
+    let mut on_samples = move |mono: &[f32]| {
+        pending.extend_from_slice(mono);
+        let needed = (FRAME_SAMPLES as f64 * ratio_in) as usize + 1;
+        while pending.len() >= needed {
+            let mut frame = [0i16; FRAME_SAMPLES];
+            for (i, slot) in frame.iter_mut().enumerate() {
+                let pos = i as f64 * ratio_in;
+                let idx = pos as usize;
+                let frac = (pos - idx as f64) as f32;
+                let a = pending[idx];
+                let b = *pending.get(idx + 1).unwrap_or(&a);
+                let s = a + (b - a) * frac;
+                *slot = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+            }
+            pending.drain(..needed - 1);
+            let bytes: Vec<u8> = frame.iter().flat_map(|s| s.to_le_bytes()).collect();
+            seq = seq.wrapping_add(1);
+            if seq.is_multiple_of(250) {
+                log::info!("Call audio: {} frames captured", seq);
+            }
+            let msg = ProtocolMessage::CallAudio {
+                call_id: call_id.clone(),
+                seq,
+                data: bytes,
+            };
+            if let Ok(data) = encode_message(&msg) {
+                let _ = net.send(NetworkCommand::SendTransient { peer_id, data });
+            }
+        }
+    };
+    let in_format = in_config.sample_format();
+    let in_stream_config: cpal::StreamConfig = in_config.into();
+    let err_in = |e| log::error!("Audio input error: {}", e);
+    let input_stream = match in_format {
+        cpal::SampleFormat::I16 => input_device.build_input_stream(
+            in_stream_config,
+            move |data: &[i16], _| {
+                if muted.load(Ordering::Relaxed) {
+                    return;
+                }
+                let mono: Vec<f32> = data
+                    .iter()
+                    .step_by(in_channels)
+                    .map(|&s| s as f32 / 32768.0)
+                    .collect();
+                on_samples(&mono);
+            },
+            err_in,
+            None,
+        ),
+        cpal::SampleFormat::U16 => input_device.build_input_stream(
+            in_stream_config,
+            move |data: &[u16], _| {
+                if muted.load(Ordering::Relaxed) {
+                    return;
+                }
+                let mono: Vec<f32> = data
+                    .iter()
+                    .step_by(in_channels)
+                    .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                    .collect();
+                on_samples(&mono);
+            },
+            err_in,
+            None,
+        ),
+        _ => input_device.build_input_stream(
+            in_stream_config,
             move |data: &[f32], _| {
                 if muted.load(Ordering::Relaxed) {
                     return;
                 }
-                // First channel only
-                pending.extend(data.iter().step_by(in_channels));
-                let needed = (FRAME_SAMPLES as f64 * ratio_in) as usize + 1;
-                while pending.len() >= needed {
-                    let mut frame = [0i16; FRAME_SAMPLES];
-                    for (i, slot) in frame.iter_mut().enumerate() {
-                        let pos = i as f64 * ratio_in;
-                        let idx = pos as usize;
-                        let frac = (pos - idx as f64) as f32;
-                        let a = pending[idx];
-                        let b = *pending.get(idx + 1).unwrap_or(&a);
-                        let s = a + (b - a) * frac;
-                        *slot = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
-                    }
-                    pending.drain(..needed - 1);
-                    let bytes: Vec<u8> = frame.iter().flat_map(|s| s.to_le_bytes()).collect();
-                    seq = seq.wrapping_add(1);
-                    let msg = ProtocolMessage::CallAudio {
-                        call_id: call_id.clone(),
-                        seq,
-                        data: bytes,
-                    };
-                    if let Ok(data) = encode_message(&msg) {
-                        let _ = net.send(NetworkCommand::SendTransient { peer_id, data });
-                    }
-                }
+                let mono: Vec<f32> = data.iter().step_by(in_channels).copied().collect();
+                on_samples(&mono);
             },
-            |e| log::error!("Audio input error: {}", e),
+            err_in,
             None,
-        )
-        .map_err(|e| format!("Mic stream: {}", e))?;
+        ),
+    }
+    .map_err(|e| format!("Mic stream ({:?}): {}", in_format, e))?;
 
-    // --- Playback: 16k ring -> native rate
+    // --- Playback: 16k ring -> native rate, format-agnostic
     let step = CALL_SAMPLE_RATE as f64 / out_rate;
     let mut hold: f32 = 0.0;
     let mut frac_pos: f64 = 0.0;
-    let output_stream = output_device
-        .build_output_stream(
-            out_config.into(),
-            move |out: &mut [f32], _| {
+    let mut next_sample = move || {
+        frac_pos += step;
+        while frac_pos >= 1.0 {
+            frac_pos -= 1.0;
+            let mut s = [0i16; 1];
+            hold = if cons.pop_slice(&mut s) == 1 {
+                s[0] as f32 / 32768.0
+            } else {
+                0.0
+            };
+        }
+        hold
+    };
+    let out_format = out_config.sample_format();
+    let out_stream_config: cpal::StreamConfig = out_config.into();
+    let err_out = |e| log::error!("Audio output error: {}", e);
+    let output_stream = match out_format {
+        cpal::SampleFormat::I16 => output_device.build_output_stream(
+            out_stream_config,
+            move |out: &mut [i16], _| {
                 for frame_out in out.chunks_mut(out_channels) {
-                    frac_pos += step;
-                    while frac_pos >= 1.0 {
-                        frac_pos -= 1.0;
-                        let mut s = [0i16; 1];
-                        if cons.pop_slice(&mut s) == 1 {
-                            hold = s[0] as f32 / 32768.0;
-                        } else {
-                            hold = 0.0;
-                        }
-                    }
+                    let v = (next_sample().clamp(-1.0, 1.0) * 32767.0) as i16;
                     for sample in frame_out.iter_mut() {
-                        *sample = hold;
+                        *sample = v;
                     }
                 }
             },
-            |e| log::error!("Audio output error: {}", e),
+            err_out,
             None,
-        )
-        .map_err(|e| format!("Speaker stream: {}", e))?;
+        ),
+        cpal::SampleFormat::U16 => output_device.build_output_stream(
+            out_stream_config,
+            move |out: &mut [u16], _| {
+                for frame_out in out.chunks_mut(out_channels) {
+                    let v = ((next_sample().clamp(-1.0, 1.0) + 1.0) * 32767.5) as u16;
+                    for sample in frame_out.iter_mut() {
+                        *sample = v;
+                    }
+                }
+            },
+            err_out,
+            None,
+        ),
+        _ => output_device.build_output_stream(
+            out_stream_config,
+            move |out: &mut [f32], _| {
+                for frame_out in out.chunks_mut(out_channels) {
+                    let v = next_sample();
+                    for sample in frame_out.iter_mut() {
+                        *sample = v;
+                    }
+                }
+            },
+            err_out,
+            None,
+        ),
+    }
+    .map_err(|e| format!("Speaker stream ({:?}): {}", out_format, e))?;
 
     input_stream.play().map_err(|e| e.to_string())?;
     output_stream.play().map_err(|e| e.to_string())?;
