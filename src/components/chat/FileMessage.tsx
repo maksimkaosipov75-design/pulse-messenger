@@ -206,13 +206,18 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
     setProgress(0);
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const ctx = ctxRef.current;
     const buffer = bufferRef.current;
     if (!ctx || !buffer) return;
     if (playing) {
       stopPlayback();
       return;
+    }
+    // Autoplay policy: contexts created outside a user gesture start
+    // suspended and play silence
+    if (ctx.state === 'suspended') {
+      await ctx.resume().catch(() => {});
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;

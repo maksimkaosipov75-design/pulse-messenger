@@ -1540,12 +1540,15 @@ async fn start_network(
                             .unwrap_or(false);
                         if !focused {
                             use tauri_plugin_notification::NotificationExt;
-                            let _ = app_handle
+                            if let Err(e) = app_handle
                                 .notification()
                                 .builder()
                                 .title(&envelope.sender_name)
                                 .body(&envelope.content)
-                                .show();
+                                .show()
+                            {
+                                log::error!("Notification failed: {}", e);
+                            }
                         }
                     }
                     Ok(ProtocolMessage::KeyExchange {
@@ -2085,6 +2088,9 @@ pub fn run() {
                     if let Some(settings) = WebViewExt::settings(&wv) {
                         settings.set_enable_media_stream(true);
                         settings.set_enable_webrtc(true);
+                        // Notification dings and voice playback must not
+                        // require a prior user gesture
+                        settings.set_media_playback_requires_user_gesture(false);
                     }
                     wv.connect_permission_request(|_, request| {
                         if request
