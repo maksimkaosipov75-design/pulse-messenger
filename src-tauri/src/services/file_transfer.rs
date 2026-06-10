@@ -94,19 +94,33 @@ impl FileTransferService {
         Ok(received / total)
     }
 
-    /// Reassemble the file from chunks and save to storage
+    /// Whether every chunk of an incoming transfer has arrived
+    pub fn is_complete(&self, message_id: &str) -> bool {
+        let incoming = self.incoming.lock().unwrap_or_else(|e| e.into_inner());
+        incoming
+            .get(message_id)
+            .is_some_and(|(_, chunks)| chunks.iter().all(|c| c.is_some()))
+    }
+
+    /// Reassemble the file from chunks and save to storage. The transfer
+    /// stays registered until it can actually be assembled — FileComplete
+    /// may arrive before the last chunks.
     pub fn complete_transfer(&self, message_id: &str) -> Result<String, String> {
         let mut incoming = self.incoming.lock().unwrap_or_else(|e| e.into_inner());
+        {
+            let (_, chunks) = incoming
+                .get(message_id)
+                .ok_or("No incoming transfer for this message")?;
+            if let Some(i) = chunks.iter().position(|c| c.is_none()) {
+                return Err(format!("Missing chunk {}", i));
+            }
+        }
         let (metadata, chunks) = incoming
             .remove(message_id)
             .ok_or("No incoming transfer for this message")?;
 
-        // Verify all chunks received and reassemble
         let mut file_data = Vec::with_capacity(metadata.file_size as usize);
-        for (i, chunk) in chunks.iter().enumerate() {
-            let chunk = chunk
-                .as_ref()
-                .ok_or_else(|| format!("Missing chunk {}", i))?;
+        for chunk in chunks.iter().flatten() {
             file_data.extend_from_slice(chunk);
         }
 
@@ -161,6 +175,7 @@ fn mime_from_extension(ext: &str) -> String {
         "opus" => "audio/opus",
         "mp4" => "video/mp4",
         "webm" => "video/webm",
+        "weba" => "audio/webm",
         "avi" => "video/x-msvideo",
         "mov" => "video/quicktime",
         "pdf" => "application/pdf",

@@ -155,7 +155,8 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
           const uint8 = new Uint8Array(arrayBuffer);
           try {
             const tempDir = await invoke<string>('get_temp_dir');
-            const tempPath = `${tempDir}/pulse_voice_${Date.now()}.webm`;
+            // .weba maps to audio/webm so receivers render a voice message
+            const tempPath = `${tempDir}/pulse_voice_${Date.now()}.weba`;
             await invoke('write_temp_file', { path: tempPath, data: Array.from(uint8) });
 
             if (peerId) {

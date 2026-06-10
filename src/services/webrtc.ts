@@ -343,12 +343,22 @@ class WebRTCService {
   }
 
   private async setupMedia(callType: CallType) {
-    const constraints: MediaStreamConstraints = {
-      audio: true,
-      video: callType === 'video',
-    };
-    this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-    this.emit('local-stream', { stream: this.localStream });
+    // Progressive fallback: exotic engines (WebKitGTK) and devices
+    // without a camera throw OverconstrainedError on the full request
+    const attempts: MediaStreamConstraints[] = callType === 'video'
+      ? [{ audio: true, video: true }, { audio: true }]
+      : [{ audio: true }];
+    let lastError: unknown;
+    for (const constraints of attempts) {
+      try {
+        this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.emit('local-stream', { stream: this.localStream });
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError;
   }
 
   private cleanup() {
