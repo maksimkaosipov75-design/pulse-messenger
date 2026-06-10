@@ -353,6 +353,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   applyIncomingMessage: (message: Message) => {
+    import('@/services/sounds').then(({ playMessageSound }) => playMessageSound());
     const { currentChat } = get();
     const isCurrentChat = currentChat?.id === message.chatId;
 

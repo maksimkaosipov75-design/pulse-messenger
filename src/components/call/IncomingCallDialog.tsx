@@ -1,12 +1,21 @@
+import { useEffect } from 'react';
 import { useCallStore } from '@/stores/callStore';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { startRinging, stopRinging } from '@/services/sounds';
 
 export function IncomingCallDialog() {
   const { t } = useTranslation();
   const { callState, callInfo, acceptCall, rejectCall } = useCallStore();
+  const ringing = callState === 'incoming-ringing' && !!callInfo;
 
-  if (callState !== 'incoming-ringing' || !callInfo) return null;
+  useEffect(() => {
+    if (!ringing) return;
+    startRinging();
+    return stopRinging;
+  }, [ringing]);
+
+  if (!ringing || !callInfo) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">

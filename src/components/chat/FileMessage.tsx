@@ -154,43 +154,84 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
   fileSize: number;
   onDownload: () => void;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  // Web Audio instead of <audio>: MediaRecorder WebM has no duration
+  // metadata, which breaks media elements (Infinity/NaN, silent playback
+  // in WebKitGTK). Decoding gives the real duration and reliable output.
+  const ctxRef = useRef<AudioContext | null>(null);
+  const bufferRef = useRef<AudioBuffer | null>(null);
+  const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const startedAtRef = useRef(0);
+  const rafRef = useRef(0);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onTime = () => {
-      if (audio.duration) setProgress(audio.currentTime / audio.duration);
-    };
-    const onLoaded = () => setDuration(audio.duration);
-    const onEnd = () => { setPlaying(false); setProgress(0); };
-
-    audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onLoaded);
-    audio.addEventListener('ended', onEnd);
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(fileUrl);
+        const bytes = await resp.arrayBuffer();
+        const ctx = new AudioContext();
+        const buffer = await ctx.decodeAudioData(bytes);
+        if (cancelled) {
+          void ctx.close();
+          return;
+        }
+        ctxRef.current = ctx;
+        bufferRef.current = buffer;
+        setDuration(buffer.duration);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    })();
     return () => {
-      audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onLoaded);
-      audio.removeEventListener('ended', onEnd);
+      cancelled = true;
+      cancelAnimationFrame(rafRef.current);
+      sourceRef.current?.stop();
+      void ctxRef.current?.close();
     };
-  }, []);
+  }, [fileUrl]);
+
+  const stopPlayback = () => {
+    cancelAnimationFrame(rafRef.current);
+    try {
+      sourceRef.current?.stop();
+    } catch {
+      // already stopped
+    }
+    sourceRef.current = null;
+    setPlaying(false);
+    setProgress(0);
+  };
 
   const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const ctx = ctxRef.current;
+    const buffer = bufferRef.current;
+    if (!ctx || !buffer) return;
     if (playing) {
-      audio.pause();
-    } else {
-      audio.play();
+      stopPlayback();
+      return;
     }
-    setPlaying(!playing);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = stopPlayback;
+    source.start();
+    sourceRef.current = source;
+    startedAtRef.current = ctx.currentTime;
+    setPlaying(true);
+    const tick = () => {
+      const elapsed = ctx.currentTime - startedAtRef.current;
+      setProgress(Math.min(elapsed / buffer.duration, 1));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
   };
 
   const formatTime = (sec: number) => {
+    if (!isFinite(sec) || isNaN(sec)) return '0:00';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -198,10 +239,10 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
 
   return (
     <div className="flex items-center gap-3 p-2 min-w-[200px]">
-      <audio ref={audioRef} src={fileUrl} preload="metadata" />
       <button
         onClick={togglePlay}
-        className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 hover:bg-blue-600 transition"
+        disabled={error || !duration}
+        className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 hover:bg-blue-600 transition disabled:opacity-50"
       >
         {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
       </button>
