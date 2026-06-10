@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, FileIcon, Play, Pause } from 'lucide-react';
 import { Message } from '@/types';
 import { useFileStore } from '@/stores/fileStore';
+import { getAudioContext } from '@/services/sounds';
 import { convertFileSrc } from '@tauri-apps/api/core';
 
 function formatFileSize(bytes: number): string {
@@ -154,18 +155,19 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
   fileSize: number;
   onDownload: () => void;
 }) {
-  // Web Audio instead of <audio>: MediaRecorder WebM has no duration
-  // metadata, which breaks media elements (Infinity/NaN, silent playback
-  // in WebKitGTK). Decoding gives the real duration and reliable output.
-  const ctxRef = useRef<AudioContext | null>(null);
+  // Try Web Audio first (gives the true duration; MediaRecorder WebM has
+  // none in the container, and WebKitGTK media elements choke on custom
+  // schemes). Engines whose decodeAudioData rejects webm/opus (Android
+  // WebView) fall back to a plain <audio> element, which works there.
   const bufferRef = useRef<AudioBuffer | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
   const startedAtRef = useRef(0);
   const rafRef = useRef(0);
+  const [mode, setMode] = useState<'loading' | 'webaudio' | 'element' | 'error'>('loading');
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,24 +175,24 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
       try {
         const resp = await fetch(fileUrl);
         const bytes = await resp.arrayBuffer();
-        const ctx = new AudioContext();
-        const buffer = await ctx.decodeAudioData(bytes);
-        if (cancelled) {
-          void ctx.close();
-          return;
-        }
-        ctxRef.current = ctx;
+        const buffer = await getAudioContext().decodeAudioData(bytes);
+        if (cancelled) return;
         bufferRef.current = buffer;
         setDuration(buffer.duration);
+        setMode('webaudio');
       } catch {
-        if (!cancelled) setError(true);
+        if (!cancelled) setMode('element');
       }
     })();
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafRef.current);
-      sourceRef.current?.stop();
-      void ctxRef.current?.close();
+      try {
+        sourceRef.current?.stop();
+      } catch {
+        // already stopped
+      }
+      audioElRef.current?.pause();
     };
   }, [fileUrl]);
 
@@ -207,15 +209,25 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
   };
 
   const togglePlay = async () => {
-    const ctx = ctxRef.current;
+    if (mode === 'element') {
+      const el = audioElRef.current;
+      if (!el) return;
+      if (playing) {
+        el.pause();
+        setPlaying(false);
+      } else {
+        void el.play().catch(() => {});
+        setPlaying(true);
+      }
+      return;
+    }
     const buffer = bufferRef.current;
-    if (!ctx || !buffer) return;
+    if (!buffer) return;
     if (playing) {
       stopPlayback();
       return;
     }
-    // Autoplay policy: contexts created outside a user gesture start
-    // suspended and play silence
+    const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
       await ctx.resume().catch(() => {});
     }
@@ -236,7 +248,7 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
   };
 
   const formatTime = (sec: number) => {
-    if (!isFinite(sec) || isNaN(sec)) return '0:00';
+    if (!isFinite(sec) || isNaN(sec)) return '';
     const m = Math.floor(sec / 60);
     const s = Math.floor(sec % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -244,9 +256,27 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
 
   return (
     <div className="flex items-center gap-3 p-2 min-w-[200px]">
+      {mode === 'element' && (
+        <audio
+          ref={audioElRef}
+          src={fileUrl}
+          preload="metadata"
+          onTimeUpdate={(e) => {
+            const el = e.currentTarget;
+            if (isFinite(el.duration) && el.duration > 0) {
+              setProgress(el.currentTime / el.duration);
+              setDuration(el.duration);
+            }
+          }}
+          onEnded={() => {
+            setPlaying(false);
+            setProgress(0);
+          }}
+        />
+      )}
       <button
         onClick={togglePlay}
-        disabled={error || !duration}
+        disabled={mode === 'loading' || mode === 'error'}
         className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 hover:bg-blue-600 transition disabled:opacity-50"
       >
         {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
