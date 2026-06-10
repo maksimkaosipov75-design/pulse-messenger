@@ -149,6 +149,41 @@ export function FileMessage({ message, isOwn }: FileMessageProps) {
   );
 }
 
+/**
+ * Android's MediaRecorder stamps WebM clusters with boot-relative
+ * times, so decoders expand the file into minutes of leading silence.
+ * Trimming silent edges recovers the real clip and its duration.
+ */
+function trimSilence(ctx: AudioContext, buffer: AudioBuffer): AudioBuffer {
+  const threshold = 0.002;
+  let start = buffer.length;
+  let end = 0;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      if (Math.abs(data[i]) > threshold) {
+        if (i < start) start = i;
+        break;
+      }
+    }
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (Math.abs(data[i]) > threshold) {
+        if (i > end) end = i;
+        break;
+      }
+    }
+  }
+  if (end <= start) return buffer;
+  const pad = Math.floor(buffer.sampleRate * 0.05);
+  start = Math.max(0, start - pad);
+  end = Math.min(buffer.length - 1, end + pad);
+  const trimmed = ctx.createBuffer(buffer.numberOfChannels, end - start + 1, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    trimmed.copyToChannel(buffer.getChannelData(ch).subarray(start, end + 1), ch);
+  }
+  return trimmed;
+}
+
 function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onDownload }: {
   fileUrl: string;
   fileName: string;
@@ -175,8 +210,10 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
       try {
         const resp = await fetch(fileUrl);
         const bytes = await resp.arrayBuffer();
-        const buffer = await getAudioContext().decodeAudioData(bytes);
+        const ctx = getAudioContext();
+        const decoded = await ctx.decodeAudioData(bytes);
         if (cancelled) return;
+        const buffer = trimSilence(ctx, decoded);
         bufferRef.current = buffer;
         setDuration(buffer.duration);
         setMode('webaudio');
