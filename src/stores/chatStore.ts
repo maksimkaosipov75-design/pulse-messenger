@@ -100,7 +100,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         limit,
         before: before ?? null,
       });
-      set({ messages, isLoadingMessages: false });
+      // Backend returns newest-first; state is chronological
+      set({ messages: messages.reverse(), isLoadingMessages: false });
     } catch (error) {
       set({ error: formatError(error), isLoadingMessages: false });
     }
@@ -110,7 +111,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { messages, currentChat } = get();
     if (!currentChat || messages.length === 0) return;
 
-    const oldest = messages[messages.length - 1];
+    const oldest = messages[0];
     try {
       const older = await invokeWithRetry<Message[]>('get_messages', {
         chatId: currentChat.id,
@@ -118,7 +119,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         before: oldest.timestamp,
       });
       if (older.length > 0) {
-        set({ messages: [...messages, ...older] });
+        set({ messages: [...older.reverse(), ...messages] });
       }
     } catch (error) {
       set({ error: formatError(error) });

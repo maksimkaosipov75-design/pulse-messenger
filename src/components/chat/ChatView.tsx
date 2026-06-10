@@ -272,7 +272,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
             <div className="animate-spin w-6 h-6 border-2 border-pulse-500 border-t-transparent rounded-full" />
           </div>
         )}
-        {[...messages].reverse().map((message) => (
+        {messages.map((message) => (
           <MessageBubble
             key={message.id}
             message={message}
