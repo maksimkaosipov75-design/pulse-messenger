@@ -30,26 +30,32 @@ export function FileMessage({ message, isOwn }: FileMessageProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | null = null;
     const load = async () => {
-      if (message.mediaUrl) {
-        // Local file — use Tauri's convertFileSrc
-        try {
-          const url = convertFileSrc(message.mediaUrl);
-          if (!cancelled) setFileUrl(url);
-        } catch {
-          if (!cancelled) setFileUrl(null);
-        }
-      } else {
-        // Try to find by message ID
-        const path = await getFileUrl(message.id, fileName);
-        if (!cancelled && path) {
+      const path = message.mediaUrl || (await getFileUrl(message.id, fileName));
+      if (path && !cancelled) {
+        if (mimeType.startsWith('audio/')) {
+          // WebKitGTK won't stream audio from the asset protocol —
+          // hand the element a blob instead
+          try {
+            const { readFile } = await import('@tauri-apps/plugin-fs');
+            const data = await readFile(path);
+            objectUrl = URL.createObjectURL(new Blob([data], { type: mimeType }));
+            if (!cancelled) setFileUrl(objectUrl);
+          } catch {
+            if (!cancelled) setFileUrl(convertFileSrc(path));
+          }
+        } else {
           setFileUrl(convertFileSrc(path));
         }
       }
       if (!cancelled) setLoading(false);
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [message.id, message.mediaUrl, fileName]);
 
   const handleDownload = async () => {

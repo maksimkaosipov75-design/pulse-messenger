@@ -27,6 +27,20 @@
     "updater:default",
     "process:allow-restart",
     "fs:allow-appcache-write-recursive",
-    "fs:allow-appcache-read-recursive"
+    "fs:allow-appcache-read-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$TEMP/**"
+        }
+      ]
+    }
   ]
 }
