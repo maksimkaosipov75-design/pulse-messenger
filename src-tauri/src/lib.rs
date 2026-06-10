@@ -486,11 +486,23 @@ struct SearchResult {
 #[tauri::command]
 fn mark_messages_read(
     state: tauri::State<std::sync::Arc<StorageService>>,
+    command_tx: tauri::State<std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
+    user: tauri::State<std::sync::Mutex<Option<User>>>,
     chat_id: String,
 ) -> Result<(), String> {
+    let my_id = user
+        .lock()
+        .ok()
+        .and_then(|u| u.as_ref().map(|u| u.id.clone()))
+        .unwrap_or_default();
+
     let messages = state.get_messages(&chat_id, 1000, None)?;
+    let mut newly_read_incoming: Vec<String> = Vec::new();
     for mut msg in messages {
         if !msg.is_read {
+            if msg.sender_id != my_id {
+                newly_read_incoming.push(msg.id.clone());
+            }
             msg.is_read = true;
             let _ = state.save_message(&msg);
         }
@@ -498,6 +510,38 @@ fn mark_messages_read(
     if let Ok(Some(mut chat)) = state.get_chat(&chat_id) {
         chat.unread_count = 0;
         let _ = state.save_chat(&chat);
+    }
+
+    // Read receipts: tell the sender their messages were actually seen
+    if !newly_read_incoming.is_empty() {
+        let peer = state
+            .get_peer_identities()?
+            .into_iter()
+            .find_map(|(uid, pid, _)| {
+                state
+                    .get_chat(&chat_id)
+                    .ok()
+                    .flatten()
+                    .filter(|c| c.participant_ids.contains(&uid))
+                    .map(|_| pid)
+            });
+        if let (Some(pid), Ok(cmd)) = (peer, command_tx.lock()) {
+            if let (Ok(peer_id), Some(tx)) = (pid.parse::<libp2p::PeerId>(), cmd.as_ref()) {
+                for mid in newly_read_incoming {
+                    let ack = ProtocolMessage::Ack {
+                        message_id: mid,
+                        status: AckStatus::Read,
+                    };
+                    if let Ok(data) = encode_message(&ack) {
+                        let _ = tx.send(NetworkCommand::SendMessage {
+                            peer_id,
+                            data,
+                            message_id: None,
+                        });
+                    }
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -1506,6 +1550,13 @@ async fn start_network(
                     }
                     Ok(ProtocolMessage::Ack { message_id, status }) => {
                         log::info!("Ack for {}: {:?}", message_id, status);
+                        if matches!(status, AckStatus::Read) {
+                            if let Some(storage) =
+                                app_handle.try_state::<std::sync::Arc<StorageService>>()
+                            {
+                                let _ = storage.mark_message_status(&message_id, "read");
+                            }
+                        }
                         let _ = app_handle.emit(
                             "message-ack",
                             &serde_json::json!({
@@ -1872,8 +1923,14 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.with_webview(|webview| {
                     use webkit2gtk::glib::object::Cast;
-                    use webkit2gtk::{PermissionRequestExt, WebViewExt};
+                    use webkit2gtk::{PermissionRequestExt, SettingsExt, WebViewExt};
                     let wv = webview.inner();
+                    // getUserMedia and RTCPeerConnection are compiled in but
+                    // disabled by default in WebKitGTK
+                    if let Some(settings) = WebViewExt::settings(&wv) {
+                        settings.set_enable_media_stream(true);
+                        settings.set_enable_webrtc(true);
+                    }
                     wv.connect_permission_request(|_, request| {
                         if request
                             .downcast_ref::<webkit2gtk::UserMediaPermissionRequest>()

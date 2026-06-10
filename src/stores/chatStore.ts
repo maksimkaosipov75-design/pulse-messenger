@@ -56,6 +56,9 @@ interface ChatState {
   applyIncomingMessage: (message: Message) => void;
   /** Delivery ack received for one of our messages */
   handleDelivered: (messageId: string) => void;
+  /** Read receipt received for one of our messages */
+  handleRead: (messageId: string) => void;
+  appendLocalMessage: (message: Message) => void;
   /** Network send failed — requeue the message into the outbox */
   handleSendFailed: (messageId: string) => void;
 }
@@ -291,6 +294,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       get().handleIncomingMessage(event.payload);
     });
 
+    await listen<{ messageId: string; status: string }>('message-ack', (event) => {
+      if (event.payload.status === 'Read') {
+        get().handleRead(event.payload.messageId);
+      }
+    });
+
     set({ incomingUnlisten: unlisten });
   },
 
@@ -299,6 +308,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       messages: state.messages.map((m) =>
         m.id === messageId ? { ...m, metadata: { ...(m.metadata ?? {}), delivered: true } } : m
+      ),
+    }));
+  },
+
+  handleRead: (messageId: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId
+          ? { ...m, metadata: { ...(m.metadata ?? {}), delivered: true, read: true } }
+          : m
+      ),
+    }));
+  },
+
+  /** Show a just-sent file/voice message without reloading the chat */
+  appendLocalMessage: (message: Message) => {
+    set((state) => ({
+      messages:
+        state.currentChat?.id === message.chatId ? [...state.messages, message] : state.messages,
+      chats: state.chats.map((c) =>
+        c.id === message.chatId ? { ...c, lastMessage: message, updatedAt: message.timestamp } : c
       ),
     }));
   },

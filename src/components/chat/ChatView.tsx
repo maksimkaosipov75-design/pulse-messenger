@@ -129,7 +129,8 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
 
   const handleFilePick = async () => {
     if (!peerId) return;
-    await selectAndSendFile(currentChat.id, peerId);
+    const sent = await selectAndSendFile(currentChat.id, peerId);
+    if (sent) useChatStore.getState().appendLocalMessage(sent);
   };
 
   // Voice recording
@@ -159,7 +160,8 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
 
             if (peerId) {
               const { sendFileFromPath } = useFileStore.getState();
-              await sendFileFromPath(currentChat.id, peerId, tempPath);
+              const sent = await sendFileFromPath(currentChat.id, peerId, tempPath);
+              useChatStore.getState().appendLocalMessage(sent);
             }
           } catch (err) {
             console.error('Failed to save voice message:', err);
@@ -463,9 +465,12 @@ function MessageBubble({
   );
 }
 
-/** Honest delivery state: queued -> sent -> acked by the peer */
+/** Honest delivery state: queued -> sent -> delivered -> read */
 function DeliveryStatus({ message }: { message: Message }) {
   const queued = useChatStore((s) => s.outbox.some((o) => o.messageId === message.id));
-  const delivered = (message.metadata as { delivered?: boolean } | null)?.delivered;
-  return <span className="text-xs">{queued ? '🕓' : delivered ? '✓✓' : '✓'}</span>;
+  const meta = message.metadata as { delivered?: boolean; read?: boolean } | null;
+  if (queued) return <span className="text-xs">🕓</span>;
+  if (meta?.read) return <span className="text-xs font-bold">✓✓</span>;
+  if (meta?.delivered) return <span className="text-xs opacity-60">✓✓</span>;
+  return <span className="text-xs opacity-60">✓</span>;
 }

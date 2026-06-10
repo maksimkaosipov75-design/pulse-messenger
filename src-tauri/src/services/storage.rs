@@ -578,6 +578,11 @@ impl StorageService {
 
     /// Record a delivery ack on a stored message (metadata.delivered = true)
     pub fn mark_message_delivered(&self, message_id: &str) -> Result<(), String> {
+        self.mark_message_status(message_id, "delivered")
+    }
+
+    /// Set a boolean status flag in a stored message's metadata
+    pub fn mark_message_status(&self, message_id: &str, key: &str) -> Result<(), String> {
         let db = self.db.lock().map_err(|e| e.to_string())?;
         let row: Option<(String, Vec<u8>)> = db
             .query_row(
@@ -593,7 +598,7 @@ impl StorageService {
             return Ok(());
         };
         let mut meta = msg.metadata.take().unwrap_or_else(|| serde_json::json!({}));
-        meta["delivered"] = serde_json::Value::Bool(true);
+        meta[key] = serde_json::Value::Bool(true);
         msg.metadata = Some(meta);
         let new_data = bincode::serialize(&msg).map_err(|e| e.to_string())?;
         db.execute(

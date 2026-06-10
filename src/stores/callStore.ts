@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { webrtcService, CallInfo, CallState, CallType } from '@/services/webrtc';
+import { toast } from '@/stores/toastStore';
+import { formatError } from '@/services/api';
 
 interface CallStoreState {
   callState: CallState;
@@ -42,6 +44,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       await webrtcService.startCall(chatId, peerId, peerName, callType, callerId, callerName);
     } catch (e) {
       console.error('Failed to start call:', e);
+      toast.error(formatError(e));
       set({ callState: 'idle', callInfo: null });
     }
   },
@@ -51,6 +54,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       await webrtcService.acceptCall();
     } catch (e) {
       console.error('Failed to accept call:', e);
+      toast.error(formatError(e));
       set({ callState: 'idle', callInfo: null });
     }
   },
