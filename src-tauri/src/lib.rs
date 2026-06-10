@@ -694,7 +694,7 @@ fn decrypt_from_peer(
 
 #[tauri::command]
 async fn send_file_message(
-    state: tauri::State<'_, StorageService>,
+    state: tauri::State<'_, std::sync::Arc<StorageService>>,
     file_service: tauri::State<'_, FileTransferService>,
     command_tx: tauri::State<'_, std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
     _encryption: tauri::State<'_, EncryptionService>,
@@ -990,7 +990,7 @@ fn send_call_reject(
 async fn start_network(
     network: tauri::State<'_, std::sync::Mutex<NetworkService>>,
     command_tx: tauri::State<'_, std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
-    _state: tauri::State<'_, StorageService>,
+    _state: tauri::State<'_, std::sync::Arc<StorageService>>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     // Clone shared state, drop lock, then start network (no lock held across await)
