@@ -2073,7 +2073,15 @@ fn finalize_incoming_file(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // RUST_LOG=info pulse-messenger -> network/transfer diagnostics
+    // RUST_LOG=info pulse-messenger -> network/transfer diagnostics;
+    // on Android logs must go to logcat (stderr is discarded)
+    #[cfg(target_os = "android")]
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(log::LevelFilter::Info)
+            .with_tag("pulse"),
+    );
+    #[cfg(not(target_os = "android"))]
     let _ = env_logger::try_init();
 
     let builder = tauri::Builder::default()
