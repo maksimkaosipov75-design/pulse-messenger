@@ -1324,6 +1324,18 @@ async fn start_network(
         const SEEN_CAP: usize = 1024;
         let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut seen_order: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+        // FileOffer context needed to build the chat message on completion
+        struct PendingOffer {
+            chat_id: String,
+            sender_id: String,
+            sender_name: String,
+            file_name: String,
+            file_size: u64,
+            mime_type: String,
+            chunk_count: u32,
+        }
+        let mut pending_offers: std::collections::HashMap<String, PendingOffer> =
+            std::collections::HashMap::new();
         while let Some(event) = event_rx.recv().await {
             if let NetworkEvent::MessageReceived { from_peer, data } = &event {
                 // Decode the protocol message
@@ -1596,6 +1608,18 @@ async fn start_network(
                                 },
                             );
                         }
+                        pending_offers.insert(
+                            message_id.clone(),
+                            PendingOffer {
+                                chat_id: chat_id.clone(),
+                                sender_id: sender_id.clone(),
+                                sender_name: sender_name.clone(),
+                                file_name: file_name.clone(),
+                                file_size,
+                                mime_type: mime_type.clone(),
+                                chunk_count,
+                            },
+                        );
                         let _ = app_handle.emit(
                             "file-offer",
                             &serde_json::json!({
@@ -1641,12 +1665,106 @@ async fn start_network(
                     Ok(ProtocolMessage::FileComplete { message_id }) => {
                         log::info!("File transfer complete: {}", message_id);
                         // Reassemble the file from chunks
-                        if let Some(ft) = app_handle.try_state::<FileTransferService>() {
-                            match ft.complete_transfer(&message_id) {
-                                Ok(path) => log::info!("File saved to: {}", path),
-                                Err(e) => log::error!("Failed to complete transfer: {}", e),
+                        let saved_path =
+                            app_handle
+                                .try_state::<FileTransferService>()
+                                .and_then(|ft| match ft.complete_transfer(&message_id) {
+                                    Ok(path) => {
+                                        log::info!("File saved to: {}", path);
+                                        Some(path)
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to complete transfer: {}", e);
+                                        None
+                                    }
+                                });
+
+                        // The file is a chat message too — without this the
+                        // receiver never sees anything in the conversation
+                        if let (Some(path), Some(offer)) =
+                            (saved_path, pending_offers.remove(&message_id))
+                        {
+                            if let Some(storage) =
+                                app_handle.try_state::<std::sync::Arc<StorageService>>()
+                            {
+                                let _ = storage.save_peer_identity(
+                                    &offer.sender_id,
+                                    &from_peer.to_string(),
+                                    None,
+                                );
+                                if let Ok(None) = storage.get_chat(&offer.chat_id) {
+                                    let me = storage
+                                        .get_user_profile()
+                                        .ok()
+                                        .flatten()
+                                        .map(|u| u.id)
+                                        .unwrap_or_default();
+                                    let chat = Chat {
+                                        id: offer.chat_id.clone(),
+                                        chat_type: ChatType::Private,
+                                        name: Some(offer.sender_name.clone()),
+                                        avatar_url: None,
+                                        participant_ids: vec![me, offer.sender_id.clone()],
+                                        last_message: None,
+                                        unread_count: 0,
+                                        updated_at: chrono::Utc::now(),
+                                        is_pinned: false,
+                                        is_muted: false,
+                                        owner_id: None,
+                                        group_settings: None,
+                                    };
+                                    let _ = storage.save_chat(&chat);
+                                }
+
+                                let message_type = if offer.mime_type.starts_with("image/") {
+                                    MessageType::Image
+                                } else if offer.mime_type.starts_with("audio/") {
+                                    MessageType::Voice
+                                } else if offer.mime_type.starts_with("video/") {
+                                    MessageType::Video
+                                } else {
+                                    MessageType::File
+                                };
+                                let msg = Message {
+                                    id: message_id.clone(),
+                                    chat_id: offer.chat_id.clone(),
+                                    sender_id: offer.sender_id.clone(),
+                                    content: Some(offer.file_name.clone()),
+                                    message_type,
+                                    timestamp: chrono::Utc::now(),
+                                    is_read: false,
+                                    reply_to_id: None,
+                                    media_url: Some(path),
+                                    metadata: Some(serde_json::json!({
+                                        "fileSize": offer.file_size,
+                                        "mimeType": offer.mime_type,
+                                        "chunkCount": offer.chunk_count,
+                                    })),
+                                };
+                                let _ = storage.save_message(&msg);
+                                if let Ok(Some(mut chat)) = storage.get_chat(&offer.chat_id) {
+                                    chat.last_message = Some(msg.clone());
+                                    chat.updated_at = msg.timestamp;
+                                    let _ = storage.save_chat(&chat);
+                                }
+                                let _ = app_handle.emit("incoming-message", &msg);
+
+                                let focused = app_handle
+                                    .get_webview_window("main")
+                                    .and_then(|w| w.is_focused().ok())
+                                    .unwrap_or(false);
+                                if !focused {
+                                    use tauri_plugin_notification::NotificationExt;
+                                    let _ = app_handle
+                                        .notification()
+                                        .builder()
+                                        .title(&offer.sender_name)
+                                        .body(&offer.file_name)
+                                        .show();
+                                }
                             }
                         }
+
                         let _ = app_handle.emit(
                             "file-complete",
                             &serde_json::json!({

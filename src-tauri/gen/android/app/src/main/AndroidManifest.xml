@@ -8,6 +8,9 @@
 
     <!-- Microphone (voice messages, calls) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- wry's WebChromeClient requests this together with RECORD_AUDIO;
+         undeclared permissions are auto-denied, killing getUserMedia -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Camera (video calls) -->
     <uses-permission android:name="android.permission.CAMERA" />
