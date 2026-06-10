@@ -63,6 +63,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         reconnectAttempts: 0,
       });
       get().setupEventListener();
+      // Send anything queued while we were offline
+      import('@/stores/chatStore').then(({ useChatStore }) =>
+        useChatStore.getState().flushOutbox()
+      );
     } catch (error) {
       set({ status: 'offline', error: String(error) });
       get().scheduleReconnect();
@@ -135,6 +139,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
           const newPeers = [...new Set([...state.peers, data.peerConnected!.peerId])];
           return { peers: newPeers, peerCount: newPeers.length };
         });
+        // A peer we queued messages for may have just appeared
+        import('@/stores/chatStore').then(({ useChatStore }) =>
+          useChatStore.getState().flushOutbox()
+        );
       }
 
       if (data.peerDisconnected) {

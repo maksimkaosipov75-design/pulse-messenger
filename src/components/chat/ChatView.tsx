@@ -14,7 +14,7 @@ import { FileMessage } from './FileMessage';
 import { GroupSettingsPanel } from '@/components/group/GroupSettingsPanel';
 
 export function ChatView({ onBack }: { onBack?: () => void } = {}) {
-  const { currentChat, messages, sendMessage, deleteMessage, markRead, loadMoreMessages, isLoadingMessages } = useChatStore();
+  const { currentChat, messages, sendChat, deleteMessage, markRead, loadMoreMessages, isLoadingMessages } = useChatStore();
   const { user } = useUserStore();
   const { selectAndSendFile } = useFileStore();
   const { startCall } = useCallStore();
@@ -65,7 +65,8 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const handleSend = async () => {
     if (!inputValue.trim()) return;
     try {
-      await sendMessage(currentChat.id, inputValue.trim(), replyTo?.id);
+      const networkPeer = currentChat.chatType === 'private' ? peerId : '';
+      await sendChat(currentChat.id, networkPeer, inputValue.trim(), replyTo?.id);
       setInputValue('');
       setReplyTo(null);
     } catch {

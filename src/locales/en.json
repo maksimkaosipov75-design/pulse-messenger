@@ -38,7 +38,9 @@
     "edit": "Edit",
     "newMessage": "New message",
     "unknownUser": "Unknown user",
-    "selectFile": "Select file"
+    "selectFile": "Select file",
+    "queuedOffline": "Message will be sent when the peer is online",
+    "queueFlushed": "Sent {{count}} queued message(s)"
   },
   "chatList": {
     "newChat": "New chat",

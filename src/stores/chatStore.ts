@@ -4,6 +4,28 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invokeWithRetry, formatError } from '@/services/api';
 import { toast } from '@/stores/toastStore';
+import i18n from '@/i18n';
+
+interface OutboxItem {
+  messageId: string;
+  chatId: string;
+  toPeer: string;
+  content: string;
+}
+
+const OUTBOX_KEY = 'pulse-outbox';
+
+function loadOutbox(): OutboxItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(OUTBOX_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+function persistOutbox(outbox: OutboxItem[]) {
+  localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
+}
 
 interface ChatState {
   chats: Chat[];
@@ -13,6 +35,7 @@ interface ChatState {
   isLoadingMessages: boolean;
   error: string | null;
   incomingUnlisten: UnlistenFn | null;
+  outbox: OutboxItem[];
 
   loadChats: () => Promise<void>;
   loadMessages: (chatId: string, limit?: number, before?: string) => Promise<void>;
@@ -20,6 +43,9 @@ interface ChatState {
   setCurrentChat: (chat: Chat | null) => void;
   sendMessage: (chatId: string, content: string, replyToId?: string) => Promise<Message>;
   sendNetworkMessage: (chatId: string, toPeer: string, content: string) => Promise<Message>;
+  /** Unified send: network when possible, otherwise save locally and queue */
+  sendChat: (chatId: string, toPeer: string, content: string, replyToId?: string) => Promise<Message>;
+  flushOutbox: () => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   createChat: (chatType: string, name?: string, participantIds?: string[]) => Promise<Chat>;
   deleteChat: (chatId: string) => Promise<void>;
@@ -36,6 +62,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingMessages: false,
   error: null,
   incomingUnlisten: null,
+  outbox: loadOutbox(),
 
   loadChats: async () => {
     set({ isLoadingChats: true, error: null });
@@ -131,6 +158,49 @@ export const useChatStore = create<ChatState>((set, get) => ({
       toast.error(formatError(error));
       set({ error: formatError(error) });
       throw error;
+    }
+  },
+
+  sendChat: async (chatId: string, toPeer: string, content: string, replyToId?: string) => {
+    if (toPeer) {
+      try {
+        return await get().sendNetworkMessage(chatId, toPeer, content);
+      } catch {
+        // Peer unreachable or network down — fall through to local + queue
+      }
+    }
+    const message = await get().sendMessage(chatId, content, replyToId);
+    if (toPeer) {
+      const outbox = [...get().outbox, { messageId: message.id, chatId, toPeer, content }];
+      persistOutbox(outbox);
+      set({ outbox });
+      toast.info(i18n.t('chat.queuedOffline'));
+    }
+    return message;
+  },
+
+  flushOutbox: async () => {
+    const pending = get().outbox;
+    if (pending.length === 0) return;
+
+    const stillPending: OutboxItem[] = [];
+    for (const item of pending) {
+      try {
+        await invoke<Message>('send_network_message', {
+          chatId: item.chatId,
+          toPeer: item.toPeer,
+          content: item.content,
+          messageId: item.messageId,
+        });
+      } catch {
+        stillPending.push(item);
+      }
+    }
+    persistOutbox(stillPending);
+    set({ outbox: stillPending });
+    const sent = pending.length - stillPending.length;
+    if (sent > 0) {
+      toast.success(i18n.t('chat.queueFlushed', { count: sent }));
     }
   },
 

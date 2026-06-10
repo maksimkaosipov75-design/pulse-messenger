@@ -374,12 +374,15 @@ fn send_network_message(
     chat_id: String,
     to_peer: String,
     content: String,
+    message_id: Option<String>,
 ) -> Result<Message, String> {
     let user = state
         .get_user_profile()?
         .ok_or("User profile not created")?;
 
-    let message_id = uuid::Uuid::new_v4().to_string();
+    // Reusing an existing ID lets the outbox resend a locally saved message
+    // without creating a duplicate (save_message is INSERT OR REPLACE)
+    let message_id = message_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let now = chrono::Utc::now();
 
     // Create envelope first, then sign the canonical representation
