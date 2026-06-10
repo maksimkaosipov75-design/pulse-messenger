@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { enUS, ru } from 'date-fns/locale';
 import { FileMessage } from './FileMessage';
 import { GroupSettingsPanel } from '@/components/group/GroupSettingsPanel';
+import { VoiceRecorder } from '@/services/voiceRecorder';
 
 export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const { currentChat, messages, sendChat, deleteMessage, markRead, loadMoreMessages, isLoadingMessages } = useChatStore();
@@ -30,8 +31,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
+  const voiceRecorderRef = useRef<VoiceRecorder | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -133,48 +133,13 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
     if (sent) useChatStore.getState().appendLocalMessage(sent);
   };
 
-  // Voice recording
+  // Voice recording: raw PCM -> WAV (MediaRecorder WebM is unplayable
+  // cross-platform: Android stamps it with boot-relative times)
   const startRecording = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-
-        // Send the bytes directly — temp files are unreliable on Android
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const uint8 = new Uint8Array(reader.result as ArrayBuffer);
-          try {
-            if (peerId) {
-              // .weba maps to audio/webm -> rendered as a voice message
-              const sent = await invoke<Message>('send_file_data', {
-                chatId: currentChat.id,
-                toPeer: peerId,
-                fileName: `voice_${Date.now()}.weba`,
-                data: Array.from(uint8),
-              });
-              useChatStore.getState().appendLocalMessage(sent);
-            }
-          } catch (err) {
-            console.error('Failed to send voice message:', err);
-            const { toast } = await import('@/stores/toastStore');
-            const { formatError } = await import('@/services/api');
-            toast.error(formatError(err));
-          }
-        };
-        reader.readAsArrayBuffer(blob);
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(100);
+      const recorder = new VoiceRecorder();
+      await recorder.start();
+      voiceRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => {
@@ -182,19 +147,39 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
       }, 1000);
     } catch (err) {
       console.error('Failed to start recording:', err);
+      const { toast } = await import('@/stores/toastStore');
+      const { formatError } = await import('@/services/api');
+      toast.error(formatError(err));
     }
-  }, [currentChat?.id, peerId]);
+  }, []);
 
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
+  const stopRecording = useCallback(async () => {
+    const recorder = voiceRecorderRef.current;
+    voiceRecorderRef.current = null;
     setIsRecording(false);
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
-  }, []);
+    if (!recorder) return;
+    try {
+      const wav = recorder.stop();
+      if (peerId) {
+        const sent = await invoke<Message>('send_file_data', {
+          chatId: currentChat.id,
+          toPeer: peerId,
+          fileName: `voice_${Date.now()}.wav`,
+          data: Array.from(wav),
+        });
+        useChatStore.getState().appendLocalMessage(sent);
+      }
+    } catch (err) {
+      console.error('Failed to send voice message:', err);
+      const { toast } = await import('@/stores/toastStore');
+      const { formatError } = await import('@/services/api');
+      toast.error(formatError(err));
+    }
+  }, [currentChat?.id, peerId]);
 
   const formatRecordingTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
