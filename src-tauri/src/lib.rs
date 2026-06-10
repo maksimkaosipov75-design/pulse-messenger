@@ -1010,6 +1010,10 @@ async fn start_network(
     // Spawn handler for incoming network events
     let app_handle = app.clone();
     tokio::spawn(async move {
+        // Replay protection: remember recently seen message IDs (bounded)
+        const SEEN_CAP: usize = 1024;
+        let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_order: std::collections::VecDeque<String> = std::collections::VecDeque::new();
         while let Some(event) = event_rx.recv().await {
             if let NetworkEvent::MessageReceived { from_peer, data } = &event {
                 // Decode the protocol message
@@ -1031,6 +1035,49 @@ async fn start_network(
                                 (now_ms - envelope.timestamp).unsigned_abs()
                             );
                             continue;
+                        }
+
+                        // Replay protection: drop duplicate message IDs
+                        if seen_ids.contains(&envelope.message_id) {
+                            log::warn!(
+                                "Rejected replayed message {} from {}",
+                                envelope.message_id,
+                                envelope.sender_id
+                            );
+                            continue;
+                        }
+                        seen_ids.insert(envelope.message_id.clone());
+                        seen_order.push_back(envelope.message_id.clone());
+                        if seen_order.len() > SEEN_CAP {
+                            if let Some(old) = seen_order.pop_front() {
+                                seen_ids.remove(&old);
+                            }
+                        }
+
+                        // Key pinning: the envelope key must match the key we
+                        // have on record for this contact, otherwise anyone
+                        // could sign with their own key and claim a known
+                        // sender_id (TOFU for unknown senders)
+                        if let Some(storage) =
+                            app_handle.try_state::<std::sync::Arc<StorageService>>()
+                        {
+                            let pinned = storage.get_contacts().ok().and_then(|contacts| {
+                                contacts
+                                    .into_iter()
+                                    .find(|c| c.user.id == envelope.sender_id)
+                                    .map(|c| c.user.public_key)
+                            });
+                            if let Some(pinned_key) = pinned {
+                                if !pinned_key.is_empty()
+                                    && pinned_key != hex::encode(&envelope.sender_public_key)
+                                {
+                                    log::warn!(
+                                        "Sender key mismatch for {} — dropping message (possible impersonation)",
+                                        envelope.sender_id
+                                    );
+                                    continue;
+                                }
+                            }
                         }
 
                         // Verify signature over canonical representation
