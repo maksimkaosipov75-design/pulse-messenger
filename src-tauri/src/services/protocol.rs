@@ -136,3 +136,94 @@ pub fn encode_message(msg: &ProtocolMessage) -> Result<Vec<u8>, String> {
 pub fn decode_message(data: &[u8]) -> Result<ProtocolMessage, String> {
     serde_json::from_slice(data).map_err(|e| format!("Decode error: {}", e))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn roundtrip(msg: &ProtocolMessage) -> ProtocolMessage {
+        decode_message(&encode_message(msg).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn text_message_roundtrip() {
+        let msg = ProtocolMessage::TextMessage(MessageEnvelope {
+            version: PROTOCOL_VERSION,
+            message_id: "m1".into(),
+            chat_id: "c1".into(),
+            sender_id: "alice".into(),
+            sender_name: "Алиса".into(),
+            content: "привет 👋".into(),
+            message_type: "text".into(),
+            timestamp: 1718000000,
+            signature: vec![1, 2, 3],
+            sender_public_key: vec![4, 5, 6],
+        });
+        match roundtrip(&msg) {
+            ProtocolMessage::TextMessage(env) => {
+                assert_eq!(env.content, "привет 👋");
+                assert_eq!(env.signature, vec![1, 2, 3]);
+                assert_eq!(env.version, PROTOCOL_VERSION);
+            }
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn file_chunk_preserves_binary_data() {
+        let data: Vec<u8> = (0..=255).collect();
+        let msg = ProtocolMessage::FileChunk {
+            message_id: "m2".into(),
+            chunk_index: 7,
+            data: data.clone(),
+        };
+        match roundtrip(&msg) {
+            ProtocolMessage::FileChunk { chunk_index, data: d, .. } => {
+                assert_eq!(chunk_index, 7);
+                assert_eq!(d, data);
+            }
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn group_update_variants_roundtrip() {
+        let msg = ProtocolMessage::GroupUpdate {
+            chat_id: "g1".into(),
+            sender_id: "alice".into(),
+            update_type: GroupUpdateType::RoleChanged {
+                user_id: "bob".into(),
+                new_role: "admin".into(),
+                changed_by: "alice".into(),
+            },
+            timestamp: 1,
+        };
+        match roundtrip(&msg) {
+            ProtocolMessage::GroupUpdate { update_type: GroupUpdateType::RoleChanged { new_role, .. }, .. } => {
+                assert_eq!(new_role, "admin");
+            }
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ack_failure_reason_roundtrip() {
+        let msg = ProtocolMessage::Ack {
+            message_id: "m3".into(),
+            status: AckStatus::Failed("peer offline".into()),
+        };
+        match roundtrip(&msg) {
+            ProtocolMessage::Ack { status: AckStatus::Failed(reason), .. } => {
+                assert_eq!(reason, "peer offline");
+            }
+            other => panic!("wrong variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn decode_rejects_garbage() {
+        assert!(decode_message(b"not json at all").is_err());
+        assert!(decode_message(br#"{"UnknownVariant":{}}"#).is_err());
+        assert!(decode_message(b"").is_err());
+    }
+}

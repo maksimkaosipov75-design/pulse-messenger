@@ -150,3 +150,91 @@ impl GroupService {
         let _ = self.storage.delete_group_invites_for_chat(chat_id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup() -> (tempfile::TempDir, GroupService) {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = Arc::new(StorageService::new(dir.path().to_path_buf()).unwrap());
+        (dir, GroupService::new(storage))
+    }
+
+    #[test]
+    fn creator_becomes_owner() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        assert_eq!(svc.get_member_role("g1", "alice"), Some(GroupRole::Owner));
+        assert!(svc.is_admin_or_above("g1", "alice"));
+    }
+
+    #[test]
+    fn duplicate_member_rejected() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        svc.add_member("g1", "bob", "Bob").unwrap();
+        assert!(svc.add_member("g1", "bob", "Bob").is_err());
+    }
+
+    #[test]
+    fn owner_cannot_be_removed_or_leave() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        assert!(svc.remove_member("g1", "alice").is_err());
+        assert!(svc.leave_group("g1", "alice").is_err());
+    }
+
+    #[test]
+    fn only_owner_changes_roles() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        svc.add_member("g1", "bob", "Bob").unwrap();
+        svc.add_member("g1", "carol", "Carol").unwrap();
+
+        assert!(svc.update_role("g1", "bob", "carol", GroupRole::Admin).is_err());
+        svc.update_role("g1", "alice", "bob", GroupRole::Admin).unwrap();
+        assert_eq!(svc.get_member_role("g1", "bob"), Some(GroupRole::Admin));
+        assert!(svc.is_admin_or_above("g1", "bob"));
+        // Even an admin cannot touch the owner
+        assert!(svc.update_role("g1", "bob", "alice", GroupRole::Member).is_err());
+    }
+
+    #[test]
+    fn invite_lifecycle() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+
+        let invite = svc.create_invite("g1", "alice", Some(1), None).unwrap();
+        assert_eq!(invite.code.len(), 8);
+
+        let chat_id = svc.join_via_invite(&invite.code, "bob", "Bob").unwrap();
+        assert_eq!(chat_id, "g1");
+        assert_eq!(svc.get_member_role("g1", "bob"), Some(GroupRole::Member));
+
+        // max_uses = 1 exhausted
+        assert!(svc.join_via_invite(&invite.code, "carol", "Carol").is_err());
+        // unknown code
+        assert!(svc.join_via_invite("bogus123", "dave", "Dave").is_err());
+    }
+
+    #[test]
+    fn expired_invite_rejected() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        let invite = svc.create_invite("g1", "alice", None, Some(0)).unwrap();
+        assert!(svc.join_via_invite(&invite.code, "bob", "Bob").is_err());
+    }
+
+    #[test]
+    fn member_can_leave_and_delete_group_clears_state() {
+        let (_dir, svc) = setup();
+        svc.create_group("g1", "alice", "Alice");
+        svc.add_member("g1", "bob", "Bob").unwrap();
+        svc.leave_group("g1", "bob").unwrap();
+        assert_eq!(svc.get_member_role("g1", "bob"), None);
+
+        svc.delete_group("g1");
+        assert!(svc.get_members("g1").is_empty());
+    }
+}

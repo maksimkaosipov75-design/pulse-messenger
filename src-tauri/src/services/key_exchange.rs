@@ -74,6 +74,16 @@ impl KeyExchangeService {
         }
     }
 
+    /// Test-only constructor that bypasses the OS keyring and key files
+    #[cfg(test)]
+    pub fn from_secret(static_secret: StaticSecret) -> Self {
+        let public_key = PublicKey::from(&static_secret);
+        Self {
+            static_secret: Mutex::new(static_secret),
+            public_key,
+        }
+    }
+
     pub fn get_public_key(&self) -> [u8; 32] {
         self.public_key.to_bytes()
     }
@@ -95,5 +105,59 @@ impl KeyExchangeService {
         // HKDF expand with 32-byte output from 32-byte secret cannot fail
         hk.expand(info, &mut key).expect("HKDF: info + key length is always valid");
         key
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn service() -> KeyExchangeService {
+        KeyExchangeService::from_secret(StaticSecret::random_from_rng(OsRng))
+    }
+
+    #[test]
+    fn diffie_hellman_agreement() {
+        let alice = service();
+        let bob = service();
+        let alice_shared = alice.compute_shared_secret(&bob.get_public_key());
+        let bob_shared = bob.compute_shared_secret(&alice.get_public_key());
+        assert_eq!(alice_shared, bob_shared);
+        assert_ne!(alice_shared, [0u8; 32]);
+    }
+
+    #[test]
+    fn different_peers_produce_different_secrets() {
+        let alice = service();
+        let bob = service();
+        let carol = service();
+        assert_ne!(
+            alice.compute_shared_secret(&bob.get_public_key()),
+            alice.compute_shared_secret(&carol.get_public_key())
+        );
+    }
+
+    #[test]
+    fn key_derivation_is_deterministic() {
+        let secret = [42u8; 32];
+        assert_eq!(
+            KeyExchangeService::derive_encryption_key(&secret, b"chat-1"),
+            KeyExchangeService::derive_encryption_key(&secret, b"chat-1")
+        );
+    }
+
+    #[test]
+    fn key_derivation_separates_contexts() {
+        let secret = [42u8; 32];
+        assert_ne!(
+            KeyExchangeService::derive_encryption_key(&secret, b"chat-1"),
+            KeyExchangeService::derive_encryption_key(&secret, b"chat-2")
+        );
+    }
+
+    #[test]
+    fn public_key_hex_is_64_chars() {
+        let svc = service();
+        assert_eq!(svc.get_public_key_hex().len(), 64);
     }
 }

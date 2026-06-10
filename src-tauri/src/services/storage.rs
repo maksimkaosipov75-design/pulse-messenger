@@ -16,16 +16,38 @@ impl StorageService {
 
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
 
-        // Schema versioning
-        db.execute_batch(&format!(
-            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
-             INSERT OR IGNORE INTO schema_version (version) VALUES ({});",
-            DB_VERSION
-        ))?;
+        // Schema versioning: single-row table. Databases created before
+        // versioning existed have a `messages` table but no version row — treat
+        // those as v1. A truly fresh database is v0 so every migration runs.
+        let pre_versioning_install: bool = db.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'messages'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )? > 0;
+
+        // Rebuild the legacy keyless schema_version table (it accumulated one
+        // duplicate row per launch), preserving the highest recorded version.
+        let legacy_version: Option<i32> = db
+            .prepare("SELECT MAX(version) FROM schema_version")
+            .ok()
+            .filter(|_| db.prepare("SELECT id FROM schema_version LIMIT 0").is_err())
+            .and_then(|mut stmt| stmt.query_row([], |row| row.get(0)).ok());
+        if legacy_version.is_some() {
+            db.execute_batch("DROP TABLE schema_version;")?;
+        }
+
+        db.execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_version (
+                id INTEGER PRIMARY KEY CHECK (id = 0),
+                version INTEGER NOT NULL
+            );",
+        )?;
 
         let current_version: i32 = db
-            .query_row("SELECT version FROM schema_version LIMIT 1", [], |row| row.get(0))
-            .unwrap_or(1);
+            .query_row("SELECT version FROM schema_version WHERE id = 0", [], |row| row.get(0))
+            .ok()
+            .or(legacy_version)
+            .unwrap_or(if pre_versioning_install { 1 } else { 0 });
 
         // Base tables (v1)
         db.execute_batch("
@@ -68,8 +90,15 @@ impl StorageService {
             );
         ")?;
 
-        // Migration v1 -> v2: add content_text column + FTS5 index
-        if current_version < 2 {
+        // Migration v1 -> v2: add content_text column + FTS5 index.
+        // Also runs (idempotently) when messages_fts is missing — repairs
+        // databases created while a bug stamped v2 without building the index.
+        let fts_exists: bool = db.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'messages_fts'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )? > 0;
+        if current_version < 2 || !fts_exists {
             // Add content_text column if missing
             let has_column: bool = db
                 .prepare("SELECT content_text FROM messages LIMIT 0")
@@ -130,8 +159,13 @@ impl StorageService {
                  SELECT rowid, content_text FROM messages WHERE content_text IS NOT NULL;"
             );
 
-            db.execute("UPDATE schema_version SET version = 2", [])?;
         }
+
+        db.execute(
+            "INSERT INTO schema_version (id, version) VALUES (0, ?1)
+             ON CONFLICT(id) DO UPDATE SET version = ?1",
+            params![DB_VERSION],
+        )?;
 
         Ok(Self {
             db: Mutex::new(db),
@@ -196,7 +230,30 @@ impl StorageService {
         db.execute("DELETE FROM chats WHERE id = ?1", params![chat_id]).map_err(|e| e.to_string())?;
         db.execute("DELETE FROM messages WHERE chat_id = ?1", params![chat_id]).map_err(|e| e.to_string())?;
         db.execute("DELETE FROM group_members WHERE chat_id = ?1", params![chat_id]).map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM group_invites WHERE json_extract(data, '$.chatId') = ?1", params![chat_id]).map_err(|e| e.to_string())?;
+        Self::delete_invites_for_chat(&db, chat_id)?;
+        Ok(())
+    }
+
+    /// Invite rows are bincode blobs, so matching by chat happens in Rust
+    fn delete_invites_for_chat(db: &Connection, chat_id: &str) -> Result<(), String> {
+        let mut stmt = db.prepare("SELECT code, data FROM group_invites").map_err(|e| e.to_string())?;
+        let codes: Vec<String> = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .filter_map(|(code, data)| {
+                bincode::deserialize::<GroupInvite>(&data)
+                    .ok()
+                    .filter(|inv| inv.chat_id == chat_id)
+                    .map(|_| code)
+            })
+            .collect();
+        for code in codes {
+            db.execute("DELETE FROM group_invites WHERE code = ?1", params![code])
+                .map_err(|e| e.to_string())?;
+        }
         Ok(())
     }
 
@@ -252,8 +309,9 @@ impl StorageService {
         let db = self.db.lock().map_err(|e| e.to_string())?;
         let fts_query = query.split_whitespace().collect::<Vec<_>>().join(" OR ");
 
+        // Chat rows are bincode blobs, so the name is resolved in Rust
         let mut stmt = db.prepare(
-            "SELECT m.data, COALESCE(c.name, m.chat_id) as chat_name \
+            "SELECT m.data, m.chat_id, c.data \
              FROM messages_fts fts \
              JOIN messages m ON m.rowid = fts.rowid \
              LEFT JOIN chats c ON c.id = m.chat_id \
@@ -265,12 +323,17 @@ impl StorageService {
         let results: Vec<(Message, String)> = stmt
             .query_map(params![fts_query, limit as i64], |row| {
                 let data: Vec<u8> = row.get(0)?;
-                let chat_name: String = row.get(1)?;
-                Ok((data, chat_name))
+                let chat_id: String = row.get(1)?;
+                let chat_data: Option<Vec<u8>> = row.get(2)?;
+                Ok((data, chat_id, chat_data))
             })
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .filter_map(|(data, chat_name)| {
+            .filter_map(|(data, chat_id, chat_data)| {
+                let chat_name = chat_data
+                    .and_then(|d| bincode::deserialize::<Chat>(&d).ok())
+                    .and_then(|c| c.name)
+                    .unwrap_or(chat_id);
                 bincode::deserialize::<Message>(&data).ok().map(|m| (m, chat_name))
             })
             .collect();
@@ -408,9 +471,7 @@ impl StorageService {
 
     pub fn delete_group_invites_for_chat(&self, chat_id: &str) -> Result<(), String> {
         let db = self.db.lock().map_err(|e| e.to_string())?;
-        db.execute("DELETE FROM group_invites WHERE json_extract(data, '$.chatId') = ?1", params![chat_id])
-            .map_err(|e| e.to_string())?;
-        Ok(())
+        Self::delete_invites_for_chat(&db, chat_id)
     }
 }
 
@@ -423,5 +484,207 @@ impl Default for Settings {
             notifications_enabled: true,
             sound_enabled: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn open(dir: &std::path::Path) -> StorageService {
+        StorageService::new(dir.to_path_buf()).expect("storage should open")
+    }
+
+    fn message(id: &str, chat_id: &str, content: &str) -> Message {
+        Message {
+            id: id.to_string(),
+            chat_id: chat_id.to_string(),
+            sender_id: "alice".to_string(),
+            content: Some(content.to_string()),
+            message_type: MessageType::Text,
+            timestamp: Utc::now(),
+            is_read: false,
+            reply_to_id: None,
+            media_url: None,
+            metadata: None,
+        }
+    }
+
+    fn chat(id: &str, name: &str) -> Chat {
+        Chat {
+            id: id.to_string(),
+            chat_type: ChatType::Private,
+            name: Some(name.to_string()),
+            avatar_url: None,
+            participant_ids: vec!["alice".to_string(), "bob".to_string()],
+            last_message: None,
+            unread_count: 0,
+            updated_at: Utc::now(),
+            is_pinned: false,
+            is_muted: false,
+            owner_id: None,
+            group_settings: None,
+        }
+    }
+
+    #[test]
+    fn message_crud_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        let msg = message("m1", "c1", "hello world");
+        storage.save_message(&msg).unwrap();
+
+        let loaded = storage.get_messages("c1", 10, None).unwrap();
+        assert_eq!(loaded, vec![msg]);
+
+        storage.delete_message("c1", "m1").unwrap();
+        assert!(storage.get_messages("c1", 10, None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn fts_search_works_on_fresh_database() {
+        // Regression: a fresh DB used to be stamped v2 without the FTS index
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        storage.save_chat(&chat("c1", "Test Chat")).unwrap();
+        storage.save_message(&message("m1", "c1", "уникальное слово")).unwrap();
+        storage.save_message(&message("m2", "c1", "something else")).unwrap();
+
+        let results = storage.search_messages("уникальное", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0.id, "m1");
+        assert_eq!(results[0].1, "Test Chat");
+    }
+
+    #[test]
+    fn fts_index_follows_deletes() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        storage.save_message(&message("m1", "c1", "findme")).unwrap();
+        storage.delete_message("c1", "m1").unwrap();
+        assert!(storage.search_messages("findme", 10).unwrap().is_empty());
+    }
+
+    #[test]
+    fn legacy_keyless_schema_version_is_repaired() {
+        let dir = tempfile::tempdir().unwrap();
+        // Simulate a DB created by the old code: keyless version table with
+        // duplicate rows, base tables present, no FTS index.
+        {
+            let db = Connection::open(dir.path().join("pulse.db")).unwrap();
+            db.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);
+                 INSERT INTO schema_version (version) VALUES (2);
+                 INSERT INTO schema_version (version) VALUES (2);
+                 CREATE TABLE messages (
+                    id TEXT NOT NULL,
+                    chat_id TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    data BLOB NOT NULL,
+                    PRIMARY KEY (chat_id, id)
+                 );",
+            )
+            .unwrap();
+        }
+
+        let storage = open(dir.path());
+        // FTS must have been built despite the recorded version saying v2
+        storage.save_message(&message("m1", "c1", "needle")).unwrap();
+        assert_eq!(storage.search_messages("needle", 10).unwrap().len(), 1);
+
+        // And the version table must now hold exactly one row
+        let db = storage.db.lock().unwrap();
+        let rows: i32 = db
+            .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn reopening_database_is_stable() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let storage = open(dir.path());
+            storage.save_message(&message("m1", "c1", "persist me")).unwrap();
+        }
+        let storage = open(dir.path());
+        assert_eq!(storage.get_messages("c1", 10, None).unwrap().len(), 1);
+        assert_eq!(storage.search_messages("persist", 10).unwrap().len(), 1);
+
+        let db = storage.db.lock().unwrap();
+        let rows: i32 = db
+            .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "schema_version must not accumulate rows");
+    }
+
+    #[test]
+    fn get_messages_respects_limit_and_pagination() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        for i in 0..5 {
+            let mut msg = message(&format!("m{}", i), "c1", &format!("msg {}", i));
+            msg.timestamp = Utc::now() + chrono::Duration::seconds(i);
+            storage.save_message(&msg).unwrap();
+        }
+
+        let page = storage.get_messages("c1", 2, None).unwrap();
+        assert_eq!(page.len(), 2);
+        assert_eq!(page[0].id, "m4", "newest first");
+
+        let before = page[1].timestamp.to_rfc3339();
+        let next = storage.get_messages("c1", 2, Some(&before)).unwrap();
+        assert_eq!(next[0].id, "m2");
+    }
+
+    #[test]
+    fn peer_keys_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        assert!(storage.get_peer_key("bob").unwrap().is_none());
+        storage.save_peer_key("bob", "abcdef").unwrap();
+        assert_eq!(storage.get_peer_key("bob").unwrap().as_deref(), Some("abcdef"));
+    }
+
+    #[test]
+    fn delete_chat_removes_related_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        storage.save_chat(&chat("c1", "Doomed")).unwrap();
+        storage.save_message(&message("m1", "c1", "bye")).unwrap();
+        let member = GroupMember {
+            user_id: "alice".to_string(),
+            display_name: "Alice".to_string(),
+            role: GroupRole::Owner,
+            joined_at: Utc::now(),
+        };
+        storage.save_group_member("c1", &member).unwrap();
+        // Regression: invite rows are bincode, the old json_extract DELETE blew up
+        let invite = GroupInvite {
+            code: "abc12345".to_string(),
+            chat_id: "c1".to_string(),
+            created_by: "alice".to_string(),
+            created_at: Utc::now(),
+            expires_at: None,
+            max_uses: None,
+            use_count: 0,
+        };
+        storage.save_group_invite(&invite).unwrap();
+        let keeper = GroupInvite { code: "keep0000".to_string(), chat_id: "c2".to_string(), ..invite.clone() };
+        storage.save_group_invite(&keeper).unwrap();
+
+        storage.delete_chat("c1").unwrap();
+        assert!(storage.get_chat("c1").unwrap().is_none());
+        assert!(storage.get_messages("c1", 10, None).unwrap().is_empty());
+        assert!(storage.get_group_members("c1").unwrap().is_empty());
+        assert!(storage.get_group_invite("abc12345").unwrap().is_none());
+        assert!(storage.get_group_invite("keep0000").unwrap().is_some(), "other chats' invites survive");
     }
 }

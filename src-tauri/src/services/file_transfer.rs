@@ -166,3 +166,85 @@ fn generate_thumbnail(image_data: &[u8]) -> Option<Vec<u8>> {
     thumb.write_to(&mut buf, image::ImageFormat::Jpeg).ok()?;
     Some(buf.into_inner())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn service(dir: &std::path::Path) -> FileTransferService {
+        FileTransferService::new(dir.to_path_buf()).unwrap()
+    }
+
+    #[test]
+    fn chunk_and_reassemble_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let svc = service(dir.path());
+
+        // 2.5 chunks worth of data
+        let data: Vec<u8> = (0..CHUNK_SIZE * 2 + CHUNK_SIZE / 2).map(|i| (i % 251) as u8).collect();
+        let src = dir.path().join("input.bin");
+        std::fs::write(&src, &data).unwrap();
+
+        let (metadata, chunks) = svc.chunk_file(src.to_str().unwrap()).unwrap();
+        assert_eq!(metadata.chunk_count, 3);
+        assert_eq!(metadata.file_size, data.len() as u64);
+        assert_eq!(chunks.len(), 3);
+
+        svc.start_incoming("msg1", metadata);
+        for (i, chunk) in chunks.into_iter().enumerate() {
+            svc.receive_chunk("msg1", i as u32, chunk).unwrap();
+        }
+        let out_path = svc.complete_transfer("msg1").unwrap();
+        assert_eq!(std::fs::read(out_path).unwrap(), data);
+    }
+
+    #[test]
+    fn progress_is_reported() {
+        let dir = tempfile::tempdir().unwrap();
+        let svc = service(dir.path());
+        let meta = FileMetadata {
+            file_name: "f".into(),
+            file_size: 4,
+            mime_type: "application/octet-stream".into(),
+            chunk_count: 4,
+            thumbnail: None,
+        };
+        svc.start_incoming("msg1", meta);
+        assert_eq!(svc.receive_chunk("msg1", 0, vec![1]).unwrap(), 0.25);
+        assert_eq!(svc.receive_chunk("msg1", 3, vec![4]).unwrap(), 0.5);
+    }
+
+    #[test]
+    fn complete_fails_on_missing_chunk() {
+        let dir = tempfile::tempdir().unwrap();
+        let svc = service(dir.path());
+        let meta = FileMetadata {
+            file_name: "f".into(),
+            file_size: 2,
+            mime_type: "application/octet-stream".into(),
+            chunk_count: 2,
+            thumbnail: None,
+        };
+        svc.start_incoming("msg1", meta);
+        svc.receive_chunk("msg1", 0, vec![1]).unwrap();
+        let err = svc.complete_transfer("msg1").unwrap_err();
+        assert!(err.contains("Missing chunk 1"), "got: {}", err);
+    }
+
+    #[test]
+    fn receive_chunk_validates_bounds_and_unknown_transfers() {
+        let dir = tempfile::tempdir().unwrap();
+        let svc = service(dir.path());
+        assert!(svc.receive_chunk("nope", 0, vec![]).is_err());
+
+        let meta = FileMetadata {
+            file_name: "f".into(),
+            file_size: 1,
+            mime_type: "application/octet-stream".into(),
+            chunk_count: 1,
+            thumbnail: None,
+        };
+        svc.start_incoming("msg1", meta);
+        assert!(svc.receive_chunk("msg1", 5, vec![1]).is_err());
+    }
+}

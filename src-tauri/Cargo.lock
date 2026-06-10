@@ -4215,6 +4215,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tauri-plugin-notification",
+ "tempfile",
  "tokio",
  "uuid",
  "x25519-dalek",
