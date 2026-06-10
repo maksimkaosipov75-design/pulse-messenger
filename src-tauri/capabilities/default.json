@@ -25,6 +25,8 @@
     "notification:allow-request-permission",
     "notification:allow-notify",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "fs:allow-appcache-write-recursive",
+    "fs:allow-appcache-read-recursive"
   ]
 }

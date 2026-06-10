@@ -5,6 +5,29 @@ use std::sync::Mutex;
 
 const DB_VERSION: i32 = 3;
 
+/// Messages and chats carry serde_json::Value metadata which bincode
+/// cannot deserialize (non-self-describing) — such rows silently
+/// disappeared. New rows are JSON; old bincode rows still load.
+fn decode_msg(data: &[u8]) -> Option<Message> {
+    serde_json::from_slice(data)
+        .ok()
+        .or_else(|| bincode::deserialize(data).ok())
+}
+
+fn encode_msg(msg: &Message) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(msg).map_err(|e| e.to_string())
+}
+
+fn decode_chat(data: &[u8]) -> Option<Chat> {
+    serde_json::from_slice(data)
+        .ok()
+        .or_else(|| bincode::deserialize(data).ok())
+}
+
+fn encode_chat(chat: &Chat) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(chat).map_err(|e| e.to_string())
+}
+
 pub struct StorageService {
     db: Mutex<Connection>,
 }
@@ -124,7 +147,7 @@ impl StorageService {
                     .filter_map(|r| r.ok())
                     .collect();
                 for (id, chat_id, data) in rows {
-                    if let Ok(msg) = bincode::deserialize::<Message>(&data) {
+                    if let Some(msg) = decode_msg(&data) {
                         if let Some(ref content) = msg.content {
                             let _ = db.execute(
                                 "UPDATE messages SET content_text = ?1 WHERE chat_id = ?2 AND id = ?3",
@@ -229,7 +252,7 @@ impl StorageService {
                 Ok(data)
             })
             .map_err(|e| e.to_string())?
-            .filter_map(|r| r.ok().and_then(|d| bincode::deserialize::<Chat>(&d).ok()))
+            .filter_map(|r| r.ok().and_then(|d| decode_chat(&d)))
             .collect();
         Ok(chats)
     }
@@ -243,14 +266,14 @@ impl StorageService {
             .query_map(params![chat_id], |row| row.get::<_, Vec<u8>>(0))
             .map_err(|e| e.to_string())?;
         match rows.next() {
-            Some(Ok(data)) => Ok(bincode::deserialize(&data).ok()),
+            Some(Ok(data)) => Ok(decode_chat(&data)),
             _ => Ok(None),
         }
     }
 
     pub fn save_chat(&self, chat: &Chat) -> Result<(), String> {
         let db = self.db.lock().map_err(|e| e.to_string())?;
-        let data = bincode::serialize(chat).map_err(|e| e.to_string())?;
+        let data = encode_chat(chat)?;
         db.execute(
             "INSERT OR REPLACE INTO chats (id, data) VALUES (?1, ?2)",
             params![chat.id, data],
@@ -331,17 +354,14 @@ impl StorageService {
                 Ok(data)
             })
             .map_err(|e| e.to_string())?
-            .filter_map(|r| {
-                r.ok()
-                    .and_then(|d| bincode::deserialize::<Message>(&d).ok())
-            })
+            .filter_map(|r| r.ok().and_then(|d| decode_msg(&d)))
             .collect();
         Ok(messages)
     }
 
     pub fn save_message(&self, message: &Message) -> Result<(), String> {
         let db = self.db.lock().map_err(|e| e.to_string())?;
-        let data = bincode::serialize(message).map_err(|e| e.to_string())?;
+        let data = encode_msg(message)?;
         let ts = message.timestamp.to_rfc3339();
         let content_text = message.content.as_deref();
         db.execute(
@@ -393,12 +413,10 @@ impl StorageService {
             .filter_map(|r| r.ok())
             .filter_map(|(data, chat_id, chat_data)| {
                 let chat_name = chat_data
-                    .and_then(|d| bincode::deserialize::<Chat>(&d).ok())
+                    .and_then(|d| decode_chat(&d))
                     .and_then(|c| c.name)
                     .unwrap_or(chat_id);
-                bincode::deserialize::<Message>(&data)
-                    .ok()
-                    .map(|m| (m, chat_name))
+                decode_msg(&data).map(|m| (m, chat_name))
             })
             .collect();
 
@@ -594,13 +612,13 @@ impl StorageService {
         let Some((chat_id, data)) = row else {
             return Ok(()); // unknown message — ack arrived after deletion
         };
-        let Ok(mut msg) = bincode::deserialize::<Message>(&data) else {
+        let Some(mut msg) = decode_msg(&data) else {
             return Ok(());
         };
         let mut meta = msg.metadata.take().unwrap_or_else(|| serde_json::json!({}));
         meta[key] = serde_json::Value::Bool(true);
         msg.metadata = Some(meta);
-        let new_data = bincode::serialize(&msg).map_err(|e| e.to_string())?;
+        let new_data = encode_msg(&msg)?;
         db.execute(
             "UPDATE messages SET data = ?1 WHERE chat_id = ?2 AND id = ?3",
             params![new_data, chat_id, message_id],
@@ -896,6 +914,54 @@ mod tests {
         assert!(storage.get_messages("c1", 10, None).unwrap().is_empty());
         assert!(storage.get_peer_identities().unwrap().is_empty());
         assert!(storage.get_user_profile().unwrap().is_none());
+    }
+
+    #[test]
+    fn messages_with_json_metadata_survive_reload() {
+        // Regression: bincode dropped any message carrying
+        // serde_json::Value metadata (file messages, delivered texts)
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let storage = open(dir.path());
+            let mut msg = message("m1", "c1", "file msg");
+            msg.metadata = Some(serde_json::json!({"mimeType": "image/png", "fileSize": 42}));
+            storage.save_message(&msg).unwrap();
+
+            let mut c = chat("c1", "Chat");
+            c.last_message = Some(msg);
+            storage.save_chat(&c).unwrap();
+        }
+        let storage = open(dir.path());
+        let loaded = storage.get_messages("c1", 10, None).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(
+            loaded[0].metadata.as_ref().unwrap()["mimeType"],
+            "image/png"
+        );
+
+        let chats = storage.get_chats().unwrap();
+        assert_eq!(chats.len(), 1);
+        assert!(chats[0].last_message.is_some());
+    }
+
+    #[test]
+    fn legacy_bincode_messages_still_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+        let msg = message("m1", "c1", "old format");
+        // Write a legacy bincode row directly
+        {
+            let db = storage.db.lock().unwrap();
+            let data = bincode::serialize(&msg).unwrap();
+            db.execute(
+                "INSERT INTO messages (id, chat_id, timestamp, data, content_text) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![msg.id, msg.chat_id, msg.timestamp.to_rfc3339(), data, "old format"],
+            )
+            .unwrap();
+        }
+        let loaded = storage.get_messages("c1", 10, None).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].content.as_deref(), Some("old format"));
     }
 
     #[test]

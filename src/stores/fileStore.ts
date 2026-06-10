@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
+import { readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { appCacheDir } from '@tauri-apps/api/path';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Message } from '@/types';
 import i18n from '../i18n';
@@ -112,17 +113,20 @@ export const useFileStore = create<FileState>((set, get) => ({
     });
     if (!filePath) return null;
     try {
-      // Read through the fs plugin: Android returns content:// URIs
-      // that the backend's std::fs cannot open
-      const data = await readFile(filePath as string);
-      const fileName =
-        (filePath as string).split(/[/\\]/).pop()?.split('?')[0] || 'file';
-      return await invoke<Message>('send_file_data', {
-        chatId,
-        toPeer,
-        fileName,
-        data: Array.from(data),
-      });
+      const path = filePath as string;
+      if (path.startsWith('content://')) {
+        // Android: no filesystem path the backend can read. Copy the
+        // bytes into the app cache through the fs plugin (efficient
+        // binary IPC — videos are too big for JSON arrays), then send
+        // the real path.
+        const data = await readFile(path);
+        const fileName = path.split(/[/\\]/).pop()?.split('?')[0] || `file_${Date.now()}`;
+        const cacheName = `pulse_send_${Date.now()}_${fileName}`;
+        await writeFile(cacheName, data, { baseDir: BaseDirectory.AppCache });
+        const cacheDir = await appCacheDir();
+        return await get().sendFileFromPath(chatId, toPeer, `${cacheDir}/${cacheName}`);
+      }
+      return await get().sendFileFromPath(chatId, toPeer, path);
     } catch (e) {
       toast.error(formatError(e));
       return null;

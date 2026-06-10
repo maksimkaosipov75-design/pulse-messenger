@@ -21,6 +21,7 @@ export function FileMessage({ message, isOwn }: FileMessageProps) {
   const { getFileUrl, saveToDownloads } = useFileStore();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const meta = (message.metadata || {}) as Record<string, unknown>;
   const fileSize = (meta.fileSize as number) || 0;
@@ -72,11 +73,19 @@ export function FileMessage({ message, isOwn }: FileMessageProps) {
   if (mimeType.startsWith('image/') && fileUrl) {
     return (
       <div className="max-w-xs">
+        {viewerOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+            onClick={() => setViewerOpen(false)}
+          >
+            <img src={fileUrl} alt={fileName} className="max-w-full max-h-full object-contain" />
+          </div>
+        )}
         <img
           src={fileUrl}
           alt={fileName}
-          className="rounded-lg max-h-64 object-cover cursor-pointer"
-          onClick={handleDownload}
+          className="rounded-lg max-h-64 object-cover cursor-zoom-in"
+          onClick={() => setViewerOpen(true)}
         />
         <div className="flex items-center justify-between mt-1 px-1">
           <span className="text-xs opacity-60">{fileName}</span>
