@@ -199,6 +199,17 @@ pub type SharedNetworkState = (
     Arc<Mutex<String>>,
 );
 
+/// An outbound request kept until acked, so it can be retried
+#[derive(Clone)]
+struct PendingSend {
+    peer_id: PeerId,
+    data: Vec<u8>,
+    message_id: Option<String>,
+    attempts: u8,
+}
+
+const MAX_SEND_ATTEMPTS: u8 = 4;
+
 /// Start the P2P network. Uses shared Arc state so that the service
 /// reflects the actual network state after start.
 pub async fn start_network(
@@ -278,24 +289,52 @@ pub async fn start_network(
 
     tokio::spawn(async move {
         let mut command_rx = command_rx;
-        // OutboundRequestId -> app message id, for delivery acks/failures
+        // Sends awaiting an ack; kept with their payload so transient
+        // failures (DialFailure while a connection is still forming)
+        // can be retried instead of silently lost
         let mut in_flight: std::collections::HashMap<
             request_response::OutboundRequestId,
-            Option<String>,
+            PendingSend,
         > = std::collections::HashMap::new();
+        // (due time, send to retry)
+        let mut retry_queue: Vec<(tokio::time::Instant, PendingSend)> = Vec::new();
+        let mut retry_tick = tokio::time::interval(Duration::from_millis(250));
         loop {
             tokio::select! {
                 event = swarm.next() => {
                     if let Some(event) = event {
-                        handle_event(event, &mut swarm, &peers, &evt_tx, &mut in_flight);
+                        handle_event(event, &mut swarm, &peers, &evt_tx, &mut in_flight, &mut retry_queue);
+                    }
+                }
+                _ = retry_tick.tick() => {
+                    let now = tokio::time::Instant::now();
+                    let due: Vec<PendingSend> = {
+                        let mut rest = Vec::new();
+                        let mut ready = Vec::new();
+                        for (when, send) in retry_queue.drain(..) {
+                            if when <= now { ready.push(send) } else { rest.push((when, send)) }
+                        }
+                        retry_queue = rest;
+                        ready
+                    };
+                    for send in due {
+                        log::info!(
+                            "Retrying send to {} (attempt {}): {} bytes",
+                            send.peer_id, send.attempts + 1, send.data.len()
+                        );
+                        let req_id = swarm
+                            .behaviour_mut()
+                            .request_response
+                            .send_request(&send.peer_id, send.data.clone());
+                        in_flight.insert(req_id, PendingSend { attempts: send.attempts + 1, ..send });
                     }
                 }
                 cmd = command_rx.recv() => {
                     match cmd {
                         Some(NetworkCommand::SendMessage { peer_id, data, message_id }) => {
                             log::info!("Sending message to {}: {} bytes", peer_id, data.len());
-                            let req_id = swarm.behaviour_mut().request_response.send_request(&peer_id, data);
-                            in_flight.insert(req_id, message_id);
+                            let req_id = swarm.behaviour_mut().request_response.send_request(&peer_id, data.clone());
+                            in_flight.insert(req_id, PendingSend { peer_id, data, message_id, attempts: 0 });
                         }
                         Some(NetworkCommand::AddPeer { addr }) => {
                             log::info!("Dialing {}", addr);
@@ -323,7 +362,8 @@ fn handle_event(
     swarm: &mut libp2p::Swarm<PulseBehaviour>,
     peers: &Arc<Mutex<HashSet<PeerId>>>,
     evt_tx: &mpsc::UnboundedSender<NetworkEvent>,
-    in_flight: &mut std::collections::HashMap<request_response::OutboundRequestId, Option<String>>,
+    in_flight: &mut std::collections::HashMap<request_response::OutboundRequestId, PendingSend>,
+    retry_queue: &mut Vec<(tokio::time::Instant, PendingSend)>,
 ) {
     match event {
         SwarmEvent::NewListenAddr { address, .. } => {
@@ -401,7 +441,11 @@ fn handle_event(
             },
         )) => {
             log::info!("ACK from {}: {}", peer, String::from_utf8_lossy(&response));
-            if let Some(Some(message_id)) = in_flight.remove(&request_id) {
+            if let Some(PendingSend {
+                message_id: Some(message_id),
+                ..
+            }) = in_flight.remove(&request_id)
+            {
                 let _ = evt_tx.send(NetworkEvent::MessageDelivered {
                     peer_id: peer.to_string(),
                     message_id,
@@ -417,12 +461,20 @@ fn handle_event(
             },
         )) => {
             log::error!("Send failed to {}: {:?}", peer, error);
-            let message_id = in_flight.remove(&request_id).flatten();
-            let _ = evt_tx.send(NetworkEvent::SendFailed {
-                peer_id: peer.to_string(),
-                message_id,
-                error: format!("{:?}", error),
-            });
+            if let Some(send) = in_flight.remove(&request_id) {
+                if send.attempts + 1 < MAX_SEND_ATTEMPTS {
+                    // Transient (connection still forming, brief drop):
+                    // back off and retry before declaring failure
+                    let delay = Duration::from_millis(600 * (send.attempts as u64 + 1));
+                    retry_queue.push((tokio::time::Instant::now() + delay, send));
+                } else {
+                    let _ = evt_tx.send(NetworkEvent::SendFailed {
+                        peer_id: peer.to_string(),
+                        message_id: send.message_id,
+                        error: format!("{:?}", error),
+                    });
+                }
+            }
         }
         SwarmEvent::Behaviour(PulseBehaviourEvent::Identify(identify::Event::Received {
             peer_id,
