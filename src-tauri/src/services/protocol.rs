@@ -112,11 +112,25 @@ pub enum CallEndReason {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GroupUpdateType {
-    MemberJoined { user_id: String, display_name: String },
-    MemberLeft { user_id: String },
-    MemberRemoved { user_id: String, removed_by: String },
-    RoleChanged { user_id: String, new_role: String, changed_by: String },
-    NameChanged { new_name: String },
+    MemberJoined {
+        user_id: String,
+        display_name: String,
+    },
+    MemberLeft {
+        user_id: String,
+    },
+    MemberRemoved {
+        user_id: String,
+        removed_by: String,
+    },
+    RoleChanged {
+        user_id: String,
+        new_role: String,
+        changed_by: String,
+    },
+    NameChanged {
+        new_name: String,
+    },
     SettingsChanged,
 }
 
@@ -178,7 +192,11 @@ mod tests {
             data: data.clone(),
         };
         match roundtrip(&msg) {
-            ProtocolMessage::FileChunk { chunk_index, data: d, .. } => {
+            ProtocolMessage::FileChunk {
+                chunk_index,
+                data: d,
+                ..
+            } => {
                 assert_eq!(chunk_index, 7);
                 assert_eq!(d, data);
             }
@@ -199,7 +217,10 @@ mod tests {
             timestamp: 1,
         };
         match roundtrip(&msg) {
-            ProtocolMessage::GroupUpdate { update_type: GroupUpdateType::RoleChanged { new_role, .. }, .. } => {
+            ProtocolMessage::GroupUpdate {
+                update_type: GroupUpdateType::RoleChanged { new_role, .. },
+                ..
+            } => {
                 assert_eq!(new_role, "admin");
             }
             other => panic!("wrong variant: {:?}", other),
@@ -213,7 +234,10 @@ mod tests {
             status: AckStatus::Failed("peer offline".into()),
         };
         match roundtrip(&msg) {
-            ProtocolMessage::Ack { status: AckStatus::Failed(reason), .. } => {
+            ProtocolMessage::Ack {
+                status: AckStatus::Failed(reason),
+                ..
+            } => {
                 assert_eq!(reason, "peer offline");
             }
             other => panic!("wrong variant: {:?}", other),

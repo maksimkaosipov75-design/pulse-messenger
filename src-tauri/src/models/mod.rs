@@ -142,22 +142,12 @@ pub struct GroupInvite {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct GroupSettings {
     pub only_admins_send: bool,
     pub only_admins_edit_info: bool,
     pub only_admins_pin: bool,
     pub slow_mode_seconds: Option<u32>,
-}
-
-impl Default for GroupSettings {
-    fn default() -> Self {
-        Self {
-            only_admins_send: false,
-            only_admins_edit_info: false,
-            only_admins_pin: false,
-            slow_mode_seconds: None,
-        }
-    }
 }
 
 // === Network Status ===

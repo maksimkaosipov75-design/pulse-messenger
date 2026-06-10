@@ -1,7 +1,7 @@
-use x25519_dalek::{PublicKey, StaticSecret};
 use rand::rngs::OsRng;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use x25519_dalek::{PublicKey, StaticSecret};
 
 const KEYRING_SERVICE: &str = "com.pulse.messenger";
 const KEYRING_X25519_KEY: &str = "x25519-static";
@@ -24,7 +24,7 @@ impl KeyExchangeService {
         })
     }
 
-    fn load_or_generate_key(data_dir: &PathBuf) -> Result<StaticSecret, String> {
+    fn load_or_generate_key(data_dir: &Path) -> Result<StaticSecret, String> {
         // Try OS keyring first
         if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_X25519_KEY) {
             if let Ok(hex_key) = entry.get_password() {
@@ -55,7 +55,7 @@ impl KeyExchangeService {
         Ok(key)
     }
 
-    fn save_key(key: &StaticSecret, data_dir: &PathBuf) -> Result<(), String> {
+    fn save_key(key: &StaticSecret, data_dir: &Path) -> Result<(), String> {
         Self::save_to_keyring(key);
         let key_path = data_dir.join("x25519.key");
         std::fs::write(&key_path, key.to_bytes()).map_err(|e| e.to_string())?;
@@ -103,7 +103,8 @@ impl KeyExchangeService {
         let hk = hkdf::Hkdf::<sha2::Sha256>::new(None, shared_secret);
         let mut key = [0u8; 32];
         // HKDF expand with 32-byte output from 32-byte secret cannot fail
-        hk.expand(info, &mut key).expect("HKDF: info + key length is always valid");
+        hk.expand(info, &mut key)
+            .expect("HKDF: info + key length is always valid");
         key
     }
 }

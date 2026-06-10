@@ -2,10 +2,10 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
     ChaCha20Poly1305, Key, Nonce,
 };
-use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 const KEYRING_SERVICE: &str = "com.pulse.messenger";
@@ -29,7 +29,7 @@ impl EncryptionService {
         })
     }
 
-    fn load_or_generate_key(data_dir: &PathBuf) -> Result<SigningKey, String> {
+    fn load_or_generate_key(data_dir: &Path) -> Result<SigningKey, String> {
         // Try OS keyring first
         if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_IDENTITY_KEY) {
             if let Ok(hex_key) = entry.get_password() {
@@ -61,7 +61,7 @@ impl EncryptionService {
         Ok(key)
     }
 
-    fn save_key(key: &SigningKey, data_dir: &PathBuf) -> Result<(), String> {
+    fn save_key(key: &SigningKey, data_dir: &Path) -> Result<(), String> {
         // Save to keyring
         Self::save_to_keyring(key);
         // Also save to file as backup
@@ -115,33 +115,29 @@ impl EncryptionService {
         let verifying_key =
             VerifyingKey::from_bytes(public_key.try_into().map_err(|_| "Invalid key length")?)
                 .map_err(|e| e.to_string())?;
-        let sig_arr: [u8; 64] = signature.try_into().map_err(|_| "Invalid signature length")?;
+        let sig_arr: [u8; 64] = signature
+            .try_into()
+            .map_err(|_| "Invalid signature length")?;
         let signature = Signature::from_bytes(&sig_arr);
         Ok(verifying_key.verify(message, &signature).is_ok())
     }
 
-    pub fn encrypt_message(
-        &self,
-        plaintext: &[u8],
-        key: &[u8],
-    ) -> Result<Vec<u8>, String> {
+    pub fn encrypt_message(&self, plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
         let cipher_key = Key::from_slice(key);
         let cipher = ChaCha20Poly1305::new(cipher_key);
         let mut nonce_bytes = [0u8; 12];
         OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let ciphertext = cipher.encrypt(nonce, plaintext).map_err(|e| e.to_string())?;
+        let ciphertext = cipher
+            .encrypt(nonce, plaintext)
+            .map_err(|e| e.to_string())?;
         // Prepend nonce to ciphertext so we can extract it during decryption
         let mut result = nonce_bytes.to_vec();
         result.extend_from_slice(&ciphertext);
         Ok(result)
     }
 
-    pub fn decrypt_message(
-        &self,
-        data: &[u8],
-        key: &[u8],
-    ) -> Result<Vec<u8>, String> {
+    pub fn decrypt_message(&self, data: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
         if data.len() < 12 {
             return Err("Invalid ciphertext: too short".to_string());
         }
@@ -166,14 +162,18 @@ mod tests {
         let svc = service();
         let msg = b"hello pulse";
         let sig = svc.sign_message(msg).unwrap();
-        assert!(svc.verify_signature(msg, &sig, &svc.get_public_key()).unwrap());
+        assert!(svc
+            .verify_signature(msg, &sig, &svc.get_public_key())
+            .unwrap());
     }
 
     #[test]
     fn verify_rejects_tampered_message() {
         let svc = service();
         let sig = svc.sign_message(b"original").unwrap();
-        assert!(!svc.verify_signature(b"tampered", &sig, &svc.get_public_key()).unwrap());
+        assert!(!svc
+            .verify_signature(b"tampered", &sig, &svc.get_public_key())
+            .unwrap());
     }
 
     #[test]
@@ -182,14 +182,18 @@ mod tests {
         let other = service();
         let msg = b"hello";
         let sig = svc.sign_message(msg).unwrap();
-        assert!(!svc.verify_signature(msg, &sig, &other.get_public_key()).unwrap());
+        assert!(!svc
+            .verify_signature(msg, &sig, &other.get_public_key())
+            .unwrap());
     }
 
     #[test]
     fn verify_rejects_malformed_inputs() {
         let svc = service();
         let sig = svc.sign_message(b"x").unwrap();
-        assert!(svc.verify_signature(b"x", &sig[..10], &svc.get_public_key()).is_err());
+        assert!(svc
+            .verify_signature(b"x", &sig[..10], &svc.get_public_key())
+            .is_err());
         assert!(svc.verify_signature(b"x", &sig, &[0u8; 5]).is_err());
     }
 

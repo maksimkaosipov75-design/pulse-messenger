@@ -1,15 +1,18 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::collections::HashMap;
 
 use crate::models::*;
 
 const CHUNK_SIZE: usize = 64 * 1024; // 64KB
 
+/// Metadata plus the chunk slots received so far
+type IncomingTransfer = (FileMetadata, Vec<Option<Vec<u8>>>);
+
 pub struct FileTransferService {
     storage_dir: PathBuf,
     /// Incoming transfers: message_id -> (metadata, received_chunks)
-    incoming: Mutex<HashMap<String, (FileMetadata, Vec<Option<Vec<u8>>>)>>,
+    incoming: Mutex<HashMap<String, IncomingTransfer>>,
 }
 
 impl FileTransferService {
@@ -35,9 +38,12 @@ impl FileTransferService {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
-        let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
+        let ext = path
+            .extension()
+            .map(|e| e.to_string_lossy().to_string())
+            .unwrap_or_default();
         let mime_type = mime_from_extension(&ext);
-        let chunk_count = ((data.len() + CHUNK_SIZE - 1) / CHUNK_SIZE) as u32;
+        let chunk_count = data.len().div_ceil(CHUNK_SIZE) as u32;
 
         let thumbnail = if mime_type.starts_with("image/") {
             generate_thumbnail(&data)
@@ -45,10 +51,7 @@ impl FileTransferService {
             None
         };
 
-        let chunks: Vec<Vec<u8>> = data
-            .chunks(CHUNK_SIZE)
-            .map(|c| c.to_vec())
-            .collect();
+        let chunks: Vec<Vec<u8>> = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
 
         let metadata = FileMetadata {
             file_name,
@@ -69,7 +72,12 @@ impl FileTransferService {
     }
 
     /// Store an incoming chunk
-    pub fn receive_chunk(&self, message_id: &str, chunk_index: u32, data: Vec<u8>) -> Result<f32, String> {
+    pub fn receive_chunk(
+        &self,
+        message_id: &str,
+        chunk_index: u32,
+        data: Vec<u8>,
+    ) -> Result<f32, String> {
         let mut incoming = self.incoming.lock().unwrap_or_else(|e| e.into_inner());
         let (_metadata, chunks) = incoming
             .get_mut(message_id)
@@ -97,12 +105,16 @@ impl FileTransferService {
         // Verify all chunks received and reassemble
         let mut file_data = Vec::with_capacity(metadata.file_size as usize);
         for (i, chunk) in chunks.iter().enumerate() {
-            let chunk = chunk.as_ref().ok_or_else(|| format!("Missing chunk {}", i))?;
+            let chunk = chunk
+                .as_ref()
+                .ok_or_else(|| format!("Missing chunk {}", i))?;
             file_data.extend_from_slice(chunk);
         }
 
         // Save to storage
-        let file_path = self.storage_dir.join(format!("{}_{}", message_id, metadata.file_name));
+        let file_path = self
+            .storage_dir
+            .join(format!("{}_{}", message_id, metadata.file_name));
         std::fs::write(&file_path, &file_data)
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
@@ -110,23 +122,30 @@ impl FileTransferService {
     }
 
     /// Save a file to the storage directory and return the path
-    pub fn save_file(&self, message_id: &str, file_name: &str, data: &[u8]) -> Result<String, String> {
-        let file_path = self.storage_dir.join(format!("{}_{}", message_id, file_name));
-        std::fs::write(&file_path, data)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+    pub fn save_file(
+        &self,
+        message_id: &str,
+        file_name: &str,
+        data: &[u8],
+    ) -> Result<String, String> {
+        let file_path = self
+            .storage_dir
+            .join(format!("{}_{}", message_id, file_name));
+        std::fs::write(&file_path, data).map_err(|e| format!("Failed to write file: {}", e))?;
         Ok(file_path.to_string_lossy().to_string())
     }
 
     /// Get the path to a stored file
     pub fn get_file_path(&self, message_id: &str, file_name: &str) -> Option<String> {
-        let path = self.storage_dir.join(format!("{}_{}", message_id, file_name));
+        let path = self
+            .storage_dir
+            .join(format!("{}_{}", message_id, file_name));
         if path.exists() {
             Some(path.to_string_lossy().to_string())
         } else {
             None
         }
     }
-
 }
 
 fn mime_from_extension(ext: &str) -> String {
@@ -181,7 +200,9 @@ mod tests {
         let svc = service(dir.path());
 
         // 2.5 chunks worth of data
-        let data: Vec<u8> = (0..CHUNK_SIZE * 2 + CHUNK_SIZE / 2).map(|i| (i % 251) as u8).collect();
+        let data: Vec<u8> = (0..CHUNK_SIZE * 2 + CHUNK_SIZE / 2)
+            .map(|i| (i % 251) as u8)
+            .collect();
         let src = dir.path().join("input.bin");
         std::fs::write(&src, &data).unwrap();
 

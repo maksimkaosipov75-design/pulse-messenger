@@ -35,11 +35,7 @@ impl Codec for PulseCodec {
     type Request = Vec<u8>;
     type Response = Vec<u8>;
 
-    async fn read_request<T>(
-        &mut self,
-        _: &Self::Protocol,
-        io: &mut T,
-    ) -> io::Result<Self::Request>
+    async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> io::Result<Self::Request>
     where
         T: AsyncReadExt + Unpin + Send,
     {
@@ -105,35 +101,18 @@ pub struct PulseBehaviour {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkEvent {
-    PeerConnected {
-        peer_id: String,
-        multiaddr: String,
-    },
-    PeerDisconnected {
-        peer_id: String,
-    },
-    MessageReceived {
-        from_peer: String,
-        data: Vec<u8>,
-    },
-    ListenAddress {
-        address: String,
-    },
-    NetworkError {
-        error: String,
-    },
+    PeerConnected { peer_id: String, multiaddr: String },
+    PeerDisconnected { peer_id: String },
+    MessageReceived { from_peer: String, data: Vec<u8> },
+    ListenAddress { address: String },
+    NetworkError { error: String },
 }
 
 // === Commands ===
 
 pub enum NetworkCommand {
-    SendMessage {
-        peer_id: PeerId,
-        data: Vec<u8>,
-    },
-    AddPeer {
-        addr: Multiaddr,
-    },
+    SendMessage { peer_id: PeerId, data: Vec<u8> },
+    AddPeer { addr: Multiaddr },
     Stop,
 }
 
@@ -156,7 +135,10 @@ impl NetworkService {
     }
 
     pub fn get_peer_id(&self) -> String {
-        self.local_peer_id.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.local_peer_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn get_peers(&self) -> Vec<String> {
@@ -173,10 +155,21 @@ impl NetworkService {
     }
 
     /// Clone the shared state Arcs for use with the `start_network` free function.
-    pub fn clone_state(&self) -> (Arc<Mutex<HashSet<PeerId>>>, Arc<Mutex<bool>>, Arc<Mutex<String>>) {
-        (self.peers.clone(), self.is_running.clone(), self.local_peer_id.clone())
+    pub fn clone_state(&self) -> SharedNetworkState {
+        (
+            self.peers.clone(),
+            self.is_running.clone(),
+            self.local_peer_id.clone(),
+        )
     }
 }
+
+/// Shared handles to the live network state: (peers, is_running, local_peer_id)
+pub type SharedNetworkState = (
+    Arc<Mutex<HashSet<PeerId>>>,
+    Arc<Mutex<bool>>,
+    Arc<Mutex<String>>,
+);
 
 /// Start the P2P network. Uses shared Arc state so that the service
 /// reflects the actual network state after start.
@@ -300,7 +293,10 @@ fn handle_event(
         SwarmEvent::Behaviour(PulseBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
             for (peer_id, multiaddr) in list {
                 log::info!("Discovered peer: {} at {}", peer_id, multiaddr);
-                peers.lock().unwrap_or_else(|e| e.into_inner()).insert(peer_id);
+                peers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(peer_id);
                 swarm.add_peer_address(peer_id, multiaddr.clone());
                 let _ = evt_tx.send(NetworkEvent::PeerConnected {
                     peer_id: peer_id.to_string(),
@@ -311,7 +307,10 @@ fn handle_event(
         SwarmEvent::Behaviour(PulseBehaviourEvent::Mdns(mdns::Event::Expired(list))) => {
             for (peer_id, _) in list {
                 log::info!("Peer expired: {}", peer_id);
-                peers.lock().unwrap_or_else(|e| e.into_inner()).remove(&peer_id);
+                peers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&peer_id);
                 let _ = evt_tx.send(NetworkEvent::PeerDisconnected {
                     peer_id: peer_id.to_string(),
                 });
@@ -320,7 +319,10 @@ fn handle_event(
         SwarmEvent::Behaviour(PulseBehaviourEvent::RequestResponse(
             request_response::Event::Message {
                 peer,
-                message: Message::Request { request, channel, .. },
+                message:
+                    Message::Request {
+                        request, channel, ..
+                    },
                 ..
             },
         )) => {
@@ -352,11 +354,7 @@ fn handle_event(
                 ..
             },
         )) => {
-            log::info!(
-                "ACK from {}: {}",
-                peer,
-                String::from_utf8_lossy(&response)
-            );
+            log::info!("ACK from {}: {}", peer, String::from_utf8_lossy(&response));
         }
         SwarmEvent::Behaviour(PulseBehaviourEvent::RequestResponse(
             request_response::Event::OutboundFailure { peer, error, .. },
@@ -366,9 +364,11 @@ fn handle_event(
                 error: format!("Failed to send to {}: {:?}", peer, error),
             });
         }
-        SwarmEvent::Behaviour(PulseBehaviourEvent::Identify(
-            identify::Event::Received { peer_id, info, .. },
-        )) => {
+        SwarmEvent::Behaviour(PulseBehaviourEvent::Identify(identify::Event::Received {
+            peer_id,
+            info,
+            ..
+        })) => {
             log::info!("Identified peer {}: {:?}", peer_id, info.protocol_version);
             for addr in info.listen_addrs {
                 swarm.add_peer_address(peer_id, addr);
@@ -382,14 +382,20 @@ fn handle_event(
             log::debug!("Ping to {} took {:?}", peer, rtt);
         }
         SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-            peers.lock().unwrap_or_else(|e| e.into_inner()).insert(peer_id);
+            peers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(peer_id);
             let _ = evt_tx.send(NetworkEvent::PeerConnected {
                 peer_id: peer_id.to_string(),
                 multiaddr: String::new(),
             });
         }
         SwarmEvent::ConnectionClosed { peer_id, .. } => {
-            peers.lock().unwrap_or_else(|e| e.into_inner()).remove(&peer_id);
+            peers
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&peer_id);
             let _ = evt_tx.send(NetworkEvent::PeerDisconnected {
                 peer_id: peer_id.to_string(),
             });
