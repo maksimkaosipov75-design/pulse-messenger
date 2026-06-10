@@ -148,24 +148,26 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
 
-        // Save to temp file via Tauri command
+        // Send the bytes directly — temp files are unreliable on Android
         const reader = new FileReader();
         reader.onload = async () => {
-          const arrayBuffer = reader.result as ArrayBuffer;
-          const uint8 = new Uint8Array(arrayBuffer);
+          const uint8 = new Uint8Array(reader.result as ArrayBuffer);
           try {
-            const tempDir = await invoke<string>('get_temp_dir');
-            // .weba maps to audio/webm so receivers render a voice message
-            const tempPath = `${tempDir}/pulse_voice_${Date.now()}.weba`;
-            await invoke('write_temp_file', { path: tempPath, data: Array.from(uint8) });
-
             if (peerId) {
-              const { sendFileFromPath } = useFileStore.getState();
-              const sent = await sendFileFromPath(currentChat.id, peerId, tempPath);
+              // .weba maps to audio/webm -> rendered as a voice message
+              const sent = await invoke<Message>('send_file_data', {
+                chatId: currentChat.id,
+                toPeer: peerId,
+                fileName: `voice_${Date.now()}.weba`,
+                data: Array.from(uint8),
+              });
               useChatStore.getState().appendLocalMessage(sent);
             }
           } catch (err) {
-            console.error('Failed to save voice message:', err);
+            console.error('Failed to send voice message:', err);
+            const { toast } = await import('@/stores/toastStore');
+            const { formatError } = await import('@/services/api');
+            toast.error(formatError(err));
           }
         };
         reader.readAsArrayBuffer(blob);

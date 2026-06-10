@@ -343,11 +343,27 @@ class WebRTCService {
   }
 
   private async setupMedia(callType: CallType) {
-    // Progressive fallback: exotic engines (WebKitGTK) and devices
-    // without a camera throw OverconstrainedError on the full request
-    const attempts: MediaStreamConstraints[] = callType === 'video'
-      ? [{ audio: true, video: true }, { audio: true }]
-      : [{ audio: true }];
+    // Preflight: WebKitGTK reports a missing capture device as
+    // OverconstrainedError("Invalid constraint") — translate it
+    let hasMic = true;
+    let hasCam = true;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      hasMic = devices.some((d) => d.kind === 'audioinput');
+      hasCam = devices.some((d) => d.kind === 'videoinput');
+    } catch {
+      // enumeration unsupported — try getUserMedia anyway
+    }
+    if (!hasMic) {
+      throw new Error('No microphone found on this device');
+    }
+
+    // Progressive fallback: devices without a camera throw on the
+    // full request
+    const attempts: MediaStreamConstraints[] =
+      callType === 'video' && hasCam
+        ? [{ audio: true, video: true }, { audio: true }]
+        : [{ audio: true }];
     let lastError: unknown;
     for (const constraints of attempts) {
       try {

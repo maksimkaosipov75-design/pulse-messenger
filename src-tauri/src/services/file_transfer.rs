@@ -41,7 +41,13 @@ impl FileTransferService {
             .extension()
             .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default();
-        let mime_type = mime_from_extension(&ext);
+        let mut mime_type = mime_from_extension(&ext);
+        // Android content:// picks often have no extension — sniff the bytes
+        if mime_type == "application/octet-stream" {
+            if let Some(sniffed) = mime_from_magic_bytes(&data) {
+                mime_type = sniffed.to_string();
+            }
+        }
         let chunk_count = data.len().div_ceil(CHUNK_SIZE) as u32;
 
         let thumbnail = if mime_type.starts_with("image/") {
@@ -159,6 +165,39 @@ impl FileTransferService {
             None
         }
     }
+}
+
+/// Identify common media formats by their magic bytes
+fn mime_from_magic_bytes(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Some("image/jpeg");
+    }
+    if data.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return Some("image/png");
+    }
+    if data.starts_with(b"GIF8") {
+        return Some("image/gif");
+    }
+    if data.len() > 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    if data.len() > 12 && &data[4..8] == b"ftyp" {
+        return Some("video/mp4");
+    }
+    if data.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        // Matroska container: webm video or audio
+        return Some("video/webm");
+    }
+    if data.starts_with(b"%PDF") {
+        return Some("application/pdf");
+    }
+    if data.starts_with(b"ID3") || data.starts_with(&[0xFF, 0xFB]) {
+        return Some("audio/mpeg");
+    }
+    if data.starts_with(b"OggS") {
+        return Some("audio/ogg");
+    }
+    None
 }
 
 fn mime_from_extension(ext: &str) -> String {
