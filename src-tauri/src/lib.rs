@@ -1451,10 +1451,17 @@ fn stop_network(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init());
+
+    // Self-updates only make sense for desktop bundles; Android uses stores/APK
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .setup(|app| {
             let data_dir = app.handle().path().app_data_dir()?;
             let storage = std::sync::Arc::new(StorageService::new(data_dir.clone())?);

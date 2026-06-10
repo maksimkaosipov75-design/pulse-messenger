@@ -195,5 +195,11 @@
     "purple": "Purple",
     "orange": "Orange",
     "red": "Red"
+  },
+  "updater": {
+    "available": "Pulse {{version}} is available. Download and install?",
+    "downloading": "Downloading update…",
+    "restartPrompt": "Update installed. Restart now?",
+    "failed": "Update failed: {{error}}"
   }
 }

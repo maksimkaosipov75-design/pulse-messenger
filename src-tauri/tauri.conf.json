@@ -26,9 +26,18 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: asset: https:; media-src 'self' blob: asset:; connect-src 'self' ipc: tauri: asset:; font-src 'self' data: asset:"
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/maksimkaosipov75-design/pulse-messenger/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZBREJFNjJENkVCODBEQTMKUldTakRiaHVMZWJiK2pjTDJ4dDFMYldTVlBnVzRtZXFzQzBJZnpXTnV0WGp6ejh3YkNWN2JGbGkK"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

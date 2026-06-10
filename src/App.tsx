@@ -9,6 +9,7 @@ import { useCallStore } from './stores/callStore';
 import { useNetworkStore } from './stores/networkStore';
 import { useTranslation } from 'react-i18next';
 import { initNotifications, setupMessageNotifications, cleanupNotifications } from './services/notifications';
+import { checkForUpdates } from './services/updater';
 import { ChatList } from './components/chat/ChatList';
 import { ChatView } from './components/chat/ChatView';
 import { Sidebar } from './components/Sidebar';
@@ -165,6 +166,7 @@ function App() {
     initNotifications();
     setupMessageNotifications();
     startNetwork();
+    checkForUpdates();
     return () => cleanupNotifications();
   }, []);
 
