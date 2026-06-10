@@ -110,7 +110,10 @@
     "encryptionEnabled": "All messages are protected",
     "version": "Version",
     "appVersion": "Pulse v1.0.0",
-    "about": "About"
+    "about": "About",
+    "account": "Account",
+    "logout": "Log out",
+    "deleteAccount": "Delete account"
   },
   "contacts": {
     "title": "Contacts",
@@ -122,7 +125,17 @@
     "block": "Block",
     "unblock": "Unblock",
     "startChat": "Start chat",
-    "searchPlaceholder": "Search contacts..."
+    "searchPlaceholder": "Search contacts...",
+    "myCode": "My code",
+    "myCodeHint": "Show this QR to a friend or send them the copied code — they add you in one tap.",
+    "myCodeOffline": "Network is offline — the code has no connection address. Connect first for best results.",
+    "copyCode": "Copy code",
+    "copied": "Copied!",
+    "addTitle": "Add contact",
+    "pasteCode": "Paste a pulse:// code here…",
+    "scanQr": "Scan QR code",
+    "cameraUnavailable": "Camera unavailable",
+    "added": "{{name}} added to contacts"
   },
   "profile": {
     "welcome": "Welcome to Pulse",
@@ -135,7 +148,11 @@
     "creating": "Creating...",
     "rules": "Only Latin letters, numbers and _",
     "minLength": "Minimum 3 characters",
-    "required": "Enter a username"
+    "required": "Enter a username",
+    "loginAs": "Log in as {{name}}",
+    "resetAccount": "Delete account and start over",
+    "resetWarning": "All chats, contacts and keys will be permanently deleted. This cannot be undone.",
+    "resetConfirm": "Delete everything"
   },
   "search": {
     "placeholder": "Search messages...",

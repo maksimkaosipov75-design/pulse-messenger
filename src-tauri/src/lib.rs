@@ -528,6 +528,7 @@ fn remove_contact(
     state: tauri::State<std::sync::Arc<StorageService>>,
     user_id: String,
 ) -> Result<(), String> {
+    state.delete_peer_identity(&user_id)?;
     state.delete_contact(&user_id)
 }
 
@@ -542,6 +543,164 @@ fn block_contact(
         contact.is_blocked = blocked;
         state.save_contact(&contact)?;
     }
+    Ok(())
+}
+
+// === Identity codes (QR / copyable contact bundles) ===
+
+/// Payload encoded into a "pulse code": everything needed to add a
+/// contact in one step — identity, crypto keys and network location.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ContactCode {
+    v: u8,
+    id: String,
+    username: String,
+    display_name: Option<String>,
+    ed25519: String,
+    x25519: String,
+    peer_id: String,
+    addr: Option<String>,
+}
+
+const CONTACT_CODE_PREFIX: &str = "pulse://contact?d=";
+
+#[tauri::command]
+fn get_my_contact_code(
+    state: tauri::State<std::sync::Arc<StorageService>>,
+    encryption: tauri::State<EncryptionService>,
+    key_exchange: tauri::State<KeyExchangeService>,
+    network: tauri::State<std::sync::Mutex<NetworkService>>,
+    listen_addr: Option<String>,
+) -> Result<String, String> {
+    use base64::Engine;
+    let user = state
+        .get_user_profile()?
+        .ok_or("User profile not created")?;
+    let peer_id = {
+        let net = network.lock().map_err(|e| e.to_string())?;
+        net.get_peer_id()
+    };
+    let code = ContactCode {
+        v: 1,
+        id: user.id,
+        username: user.username,
+        display_name: user.display_name,
+        ed25519: encryption.get_public_key_hex(),
+        x25519: key_exchange.get_public_key_hex(),
+        peer_id,
+        addr: listen_addr,
+    };
+    let json = serde_json::to_vec(&code).map_err(|e| e.to_string())?;
+    Ok(format!(
+        "{}{}",
+        CONTACT_CODE_PREFIX,
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(json)
+    ))
+}
+
+/// Add a contact from a pulse code: saves the contact, pins both keys,
+/// maps the libp2p peer identity and dials the peer — one step.
+#[tauri::command]
+fn add_contact_by_code(
+    state: tauri::State<std::sync::Arc<StorageService>>,
+    command_tx: tauri::State<std::sync::Mutex<Option<mpsc::UnboundedSender<NetworkCommand>>>>,
+    code: String,
+    nickname: Option<String>,
+) -> Result<Contact, String> {
+    use base64::Engine;
+    let trimmed = code.trim();
+    let b64 = trimmed.strip_prefix(CONTACT_CODE_PREFIX).unwrap_or(trimmed);
+    let json = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(b64)
+        .map_err(|_| "Invalid code format")?;
+    let parsed: ContactCode = serde_json::from_slice(&json).map_err(|_| "Invalid code contents")?;
+
+    if parsed.v != 1 {
+        return Err("Unsupported code version".to_string());
+    }
+    if hex::decode(&parsed.ed25519).map(|b| b.len()) != Ok(32)
+        || hex::decode(&parsed.x25519).map(|b| b.len()) != Ok(32)
+    {
+        return Err("Invalid keys in code".to_string());
+    }
+    let peer_id: libp2p::PeerId = parsed.peer_id.parse().map_err(|_| "Invalid peer ID")?;
+
+    if let Some(me) = state.get_user_profile()? {
+        if me.id == parsed.id {
+            return Err("Cannot add yourself".to_string());
+        }
+    }
+
+    let contact = Contact {
+        user: User {
+            id: parsed.id.clone(),
+            username: parsed.username,
+            display_name: parsed.display_name,
+            avatar_url: None,
+            bio: None,
+            public_key: parsed.ed25519,
+            last_seen: chrono::Utc::now(),
+            is_online: false,
+        },
+        is_blocked: false,
+        nickname,
+        added_at: chrono::Utc::now(),
+    };
+    state.save_contact(&contact)?;
+    state.save_peer_key(&parsed.id, &parsed.x25519)?;
+    state.save_peer_identity(&parsed.id, &peer_id.to_string(), parsed.addr.as_deref())?;
+
+    // Best-effort dial so the chat works immediately
+    if let Some(addr) = &parsed.addr {
+        if let Ok(multiaddr) = addr.parse::<libp2p::Multiaddr>() {
+            if let Ok(cmd) = command_tx.lock() {
+                if let Some(tx) = cmd.as_ref() {
+                    let _ = tx.send(NetworkCommand::AddPeer { addr: multiaddr });
+                }
+            }
+        }
+    }
+
+    Ok(contact)
+}
+
+#[tauri::command]
+fn get_peer_identities(
+    state: tauri::State<std::sync::Arc<StorageService>>,
+) -> Result<Vec<serde_json::Value>, String> {
+    Ok(state
+        .get_peer_identities()?
+        .into_iter()
+        .map(|(user_id, peer_id, multiaddr)| {
+            serde_json::json!({ "userId": user_id, "peerId": peer_id, "multiaddr": multiaddr })
+        })
+        .collect())
+}
+
+// === Account session ===
+
+#[tauri::command]
+fn logout(user_state: tauri::State<std::sync::Mutex<Option<User>>>) -> Result<(), String> {
+    let mut u = user_state.lock().map_err(|e| e.to_string())?;
+    *u = None;
+    Ok(())
+}
+
+/// Irreversibly wipe all local data and keys (account reset)
+#[tauri::command]
+fn delete_account(
+    app: tauri::AppHandle,
+    state: tauri::State<std::sync::Arc<StorageService>>,
+    user_state: tauri::State<std::sync::Mutex<Option<User>>>,
+) -> Result<(), String> {
+    state.wipe_all()?;
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        EncryptionService::delete_stored_keys(&data_dir);
+        KeyExchangeService::delete_stored_keys(&data_dir);
+    }
+    let mut u = user_state.lock().map_err(|e| e.to_string())?;
+    *u = None;
     Ok(())
 }
 
@@ -1161,7 +1320,52 @@ async fn start_network(
                             metadata: None,
                         };
 
-                        // Save message via a Tauri event that the frontend handles
+                        // Persist before notifying the UI: messages must
+                        // survive even if no window is listening
+                        if let Some(storage) =
+                            app_handle.try_state::<std::sync::Arc<StorageService>>()
+                        {
+                            // Remember which libp2p peer this user is so
+                            // replies route without a manual contact add
+                            let _ = storage.save_peer_identity(
+                                &envelope.sender_id,
+                                &from_peer.to_string(),
+                                None,
+                            );
+
+                            // First message from an unknown chat: create it
+                            if let Ok(None) = storage.get_chat(&envelope.chat_id) {
+                                let me = storage
+                                    .get_user_profile()
+                                    .ok()
+                                    .flatten()
+                                    .map(|u| u.id)
+                                    .unwrap_or_default();
+                                let chat = Chat {
+                                    id: envelope.chat_id.clone(),
+                                    chat_type: ChatType::Private,
+                                    name: Some(envelope.sender_name.clone()),
+                                    avatar_url: None,
+                                    participant_ids: vec![me, envelope.sender_id.clone()],
+                                    last_message: None,
+                                    unread_count: 0,
+                                    updated_at: chrono::Utc::now(),
+                                    is_pinned: false,
+                                    is_muted: false,
+                                    owner_id: None,
+                                    group_settings: None,
+                                };
+                                let _ = storage.save_chat(&chat);
+                            }
+
+                            let _ = storage.save_message(&msg);
+                            if let Ok(Some(mut chat)) = storage.get_chat(&envelope.chat_id) {
+                                chat.last_message = Some(msg.clone());
+                                chat.updated_at = msg.timestamp;
+                                let _ = storage.save_chat(&chat);
+                            }
+                        }
+
                         let _ = app_handle.emit("incoming-message", &msg);
                     }
                     Ok(ProtocolMessage::KeyExchange {
@@ -1556,6 +1760,11 @@ pub fn run() {
             add_contact,
             remove_contact,
             block_contact,
+            get_my_contact_code,
+            add_contact_by_code,
+            get_peer_identities,
+            logout,
+            delete_account,
             get_settings,
             update_settings,
             set_theme,

@@ -100,26 +100,45 @@ describe('chatStore', () => {
   });
 
   describe('handleIncomingMessage', () => {
-    it('appends to open chat without unread increment', () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+
+    it('appends to open chat without unread increment', async () => {
       useChatStore.setState({
         currentChat: { id: 'c1' } as never,
         chats: [{ id: 'c1', unreadCount: 0 } as never],
       });
       useChatStore.getState().handleIncomingMessage(message('m1') as never);
+      await flush();
       const state = useChatStore.getState();
       expect(state.messages).toHaveLength(1);
       expect((state.chats[0] as { unreadCount: number }).unreadCount).toBe(0);
     });
 
-    it('increments unread for background chats', () => {
+    it('increments unread for background chats', async () => {
       useChatStore.setState({
         currentChat: { id: 'other' } as never,
         chats: [{ id: 'c1', unreadCount: 1 } as never],
       });
       useChatStore.getState().handleIncomingMessage(message('m1') as never);
+      await flush();
       const state = useChatStore.getState();
       expect(state.messages).toHaveLength(0);
       expect((state.chats[0] as { unreadCount: number }).unreadCount).toBe(2);
+    });
+
+    it('drops messages from blocked contacts', async () => {
+      const { useContactsStore } = await import('./contactsStore');
+      useContactsStore.setState({
+        contacts: [{ user: { id: 'me' }, isBlocked: true } as never],
+      });
+      useChatStore.setState({
+        currentChat: { id: 'c1' } as never,
+        chats: [{ id: 'c1', unreadCount: 0 } as never],
+      });
+      useChatStore.getState().handleIncomingMessage(message('m1') as never);
+      await flush();
+      expect(useChatStore.getState().messages).toHaveLength(0);
+      useContactsStore.setState({ contacts: [] });
     });
   });
 });

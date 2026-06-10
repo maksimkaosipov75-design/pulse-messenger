@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-const DB_VERSION: i32 = 2;
+const DB_VERSION: i32 = 3;
 
 pub struct StorageService {
     db: Mutex<Connection>,
@@ -166,6 +166,18 @@ impl StorageService {
                 "INSERT INTO messages_fts(rowid, content_text)
                  SELECT rowid, content_text FROM messages WHERE content_text IS NOT NULL;",
             );
+        }
+
+        // Migration v2 -> v3: map user IDs to libp2p peer identities so
+        // contacts, peers and chats are one entity
+        if current_version < 3 {
+            db.execute_batch(
+                "CREATE TABLE IF NOT EXISTS peer_identities (
+                    user_id TEXT PRIMARY KEY,
+                    peer_id TEXT NOT NULL,
+                    multiaddr TEXT
+                );",
+            )?;
         }
 
         db.execute(
@@ -564,6 +576,70 @@ impl StorageService {
         Ok(())
     }
 
+    // === Peer Identities (user_id <-> libp2p peer) ===
+
+    pub fn save_peer_identity(
+        &self,
+        user_id: &str,
+        peer_id: &str,
+        multiaddr: Option<&str>,
+    ) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| e.to_string())?;
+        // COALESCE keeps a known multiaddr when the update doesn't carry one
+        db.execute(
+            "INSERT INTO peer_identities (user_id, peer_id, multiaddr) VALUES (?1, ?2, ?3)
+             ON CONFLICT(user_id) DO UPDATE SET
+                 peer_id = excluded.peer_id,
+                 multiaddr = COALESCE(excluded.multiaddr, peer_identities.multiaddr)",
+            params![user_id, peer_id, multiaddr],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_peer_identities(&self) -> Result<Vec<(String, String, Option<String>)>, String> {
+        let db = self.db.lock().map_err(|e| e.to_string())?;
+        let mut stmt = db
+            .prepare("SELECT user_id, peer_id, multiaddr FROM peer_identities")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get::<_, Option<String>>(2)?))
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(rows)
+    }
+
+    pub fn delete_peer_identity(&self, user_id: &str) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| e.to_string())?;
+        db.execute(
+            "DELETE FROM peer_identities WHERE user_id = ?1",
+            params![user_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Delete all user data (account reset)
+    pub fn wipe_all(&self) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| e.to_string())?;
+        db.execute_batch(
+            "DELETE FROM users;
+             DELETE FROM chats;
+             DELETE FROM messages;
+             DELETE FROM contacts;
+             DELETE FROM settings;
+             DELETE FROM peer_keys;
+             DELETE FROM peer_identities;
+             DELETE FROM group_members;
+             DELETE FROM group_invites;",
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn delete_group_invites_for_chat(&self, chat_id: &str) -> Result<(), String> {
         let db = self.db.lock().map_err(|e| e.to_string())?;
         Self::delete_invites_for_chat(&db, chat_id)
@@ -745,6 +821,48 @@ mod tests {
         let before = page[1].timestamp.to_rfc3339();
         let next = storage.get_messages("c1", 2, Some(&before)).unwrap();
         assert_eq!(next[0].id, "m2");
+    }
+
+    #[test]
+    fn peer_identities_roundtrip_and_preserve_multiaddr() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+
+        storage
+            .save_peer_identity("u1", "12D3KooPeer", Some("/ip4/1.2.3.4/tcp/1"))
+            .unwrap();
+        // An update without a multiaddr must keep the known one
+        storage
+            .save_peer_identity("u1", "12D3KooPeerNew", None)
+            .unwrap();
+
+        let ids = storage.get_peer_identities().unwrap();
+        assert_eq!(
+            ids,
+            vec![(
+                "u1".to_string(),
+                "12D3KooPeerNew".to_string(),
+                Some("/ip4/1.2.3.4/tcp/1".to_string())
+            )]
+        );
+
+        storage.delete_peer_identity("u1").unwrap();
+        assert!(storage.get_peer_identities().unwrap().is_empty());
+    }
+
+    #[test]
+    fn wipe_all_clears_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let storage = open(dir.path());
+        storage.save_chat(&chat("c1", "Chat")).unwrap();
+        storage.save_message(&message("m1", "c1", "hi")).unwrap();
+        storage.save_peer_identity("u1", "12D3Koo", None).unwrap();
+
+        storage.wipe_all().unwrap();
+        assert!(storage.get_chats().unwrap().is_empty());
+        assert!(storage.get_messages("c1", 10, None).unwrap().is_empty());
+        assert!(storage.get_peer_identities().unwrap().is_empty());
+        assert!(storage.get_user_profile().unwrap().is_none());
     }
 
     #[test]

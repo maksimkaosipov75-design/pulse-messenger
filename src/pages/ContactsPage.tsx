@@ -2,24 +2,26 @@ import { useEffect, useState } from 'react';
 import { useContactsStore } from '@/stores/contactsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUserStore } from '@/stores/userStore';
-import { Search, UserPlus, Trash2, Ban, MessageCircle } from 'lucide-react';
+import { Search, UserPlus, Trash2, Ban, MessageCircle, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Contact } from '@/types';
+import { MyCodeDialog } from '@/components/contacts/MyCodeDialog';
+import { AddContactDialog } from '@/components/contacts/AddContactDialog';
 
 export function ContactsPage() {
   const { t } = useTranslation();
-  const { contacts, isLoading, loadContacts, addContact, removeContact, blockContact } = useContactsStore();
-  const { createChat } = useChatStore();
+  const { contacts, isLoading, loadContacts, removeContact, blockContact } = useContactsStore();
+  const { createChat, chats, loadChats } = useChatStore();
   const { user } = useUserStore();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [addUserId, setAddUserId] = useState('');
-  const [addNickname, setAddNickname] = useState('');
+  const [showMyCode, setShowMyCode] = useState(false);
 
   useEffect(() => {
     loadContacts();
+    if (chats.length === 0) loadChats();
   }, []);
 
   const filtered = search
@@ -32,25 +34,18 @@ export function ContactsPage() {
 
   const handleStartChat = async (contact: Contact) => {
     if (!user) return;
-    const chat = await createChat('private', contact.user.displayName || contact.user.username, [
-      user.id,
-      contact.user.id,
-    ]);
+    // Reuse the existing 1:1 chat if there is one
+    const existing = chats.find(
+      (c) => c.chatType === 'private' && c.participantIds.includes(contact.user.id)
+    );
+    const chat =
+      existing ??
+      (await createChat('private', contact.user.displayName || contact.user.username, [
+        user.id,
+        contact.user.id,
+      ]));
     navigate('/');
     useChatStore.getState().setCurrentChat(chat);
-  };
-
-  const handleAddContact = async () => {
-    if (!addUserId.trim()) return;
-    try {
-      const newUser = { id: addUserId.trim(), username: addUserId.trim(), publicKey: '', lastSeen: '', isOnline: false } as import('@/types').User;
-      await addContact(newUser, addNickname.trim() || undefined);
-      setAddUserId('');
-      setAddNickname('');
-      setShowAdd(false);
-    } catch (e) {
-      console.error('Failed to add contact:', e);
-    }
   };
 
   return (
@@ -58,44 +53,26 @@ export function ContactsPage() {
       <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('contacts.title')}</h1>
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <UserPlus size={20} className="text-gray-500" />
-          </button>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setShowMyCode(true)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              title={t('contacts.myCode')}
+            >
+              <QrCode size={20} className="text-gray-500" />
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              title={t('contacts.addTitle')}
+            >
+              <UserPlus size={20} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
-        {showAdd && (
-          <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2">
-            <input
-              value={addUserId}
-              onChange={(e) => setAddUserId(e.target.value)}
-              placeholder={t('contacts.userId')}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pulse-500"
-            />
-            <input
-              value={addNickname}
-              onChange={(e) => setAddNickname(e.target.value)}
-              placeholder={t('contacts.nickname')}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pulse-500"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => { setShowAdd(false); setAddUserId(''); setAddNickname(''); }}
-                className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                {t('group.cancel')}
-              </button>
-              <button
-                onClick={handleAddContact}
-                className="px-3 py-1.5 text-sm bg-pulse-500 text-white rounded-lg hover:bg-pulse-600"
-              >
-                {t('contacts.add')}
-              </button>
-            </div>
-          </div>
-        )}
+        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
+        {showAdd && <AddContactDialog onClose={() => setShowAdd(false)} />}
 
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

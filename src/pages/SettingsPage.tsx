@@ -16,15 +16,21 @@ import {
   Shield,
   Wifi,
   Info,
+  LogOut,
+  QrCode,
+  Trash2,
 } from 'lucide-react';
+import { MyCodeDialog } from '@/components/contacts/MyCodeDialog';
 
 export function SettingsPage() {
   const { t } = useTranslation();
   const { settings, themes, setTheme, toggleDark, updateSettings } = useSettingsStore();
-  const { user, updateProfile } = useUserStore();
+  const { user, updateProfile, logout, deleteAccount } = useUserStore();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [saved, setSaved] = useState(false);
+  const [showMyCode, setShowMyCode] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSaveProfile = async () => {
     await updateProfile({
@@ -173,6 +179,55 @@ export function SettingsPage() {
         <Section icon={<Wifi size={20} />} title={t('settings.network')}>
           <ConnectionStatus />
         </Section>
+
+        {/* Account */}
+        <Section icon={<LogOut size={20} />} title={t('settings.account')}>
+          <div className="space-y-2">
+            <button
+              onClick={() => setShowMyCode(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <QrCode size={16} />
+              {t('contacts.myCode')}
+            </button>
+            <button
+              onClick={logout}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <LogOut size={16} />
+              {t('settings.logout')}
+            </button>
+            {confirmDelete ? (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <p className="text-sm text-red-600 dark:text-red-400 mb-2">{t('profile.resetWarning')}</p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  >
+                    {t('group.cancel')}
+                  </button>
+                  <button
+                    onClick={deleteAccount}
+                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    {t('profile.resetConfirm')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <Trash2 size={16} />
+                {t('settings.deleteAccount')}
+              </button>
+            )}
+          </div>
+        </Section>
+
+        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
 
         {/* About */}
         <Section icon={<Info size={20} />} title={t('settings.about')}>

@@ -1,5 +1,6 @@
 import { useChatStore } from '@/stores/chatStore';
 import { useUserStore } from '@/stores/userStore';
+import { useContactsStore } from '@/stores/contactsStore';
 import { useFileStore } from '@/stores/fileStore';
 import { useCallStore } from '@/stores/callStore';
 import { useGroupStore } from '@/stores/groupStore';
@@ -16,6 +17,7 @@ import { GroupSettingsPanel } from '@/components/group/GroupSettingsPanel';
 export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const { currentChat, messages, sendChat, deleteMessage, markRead, loadMoreMessages, isLoadingMessages } = useChatStore();
   const { user } = useUserStore();
+  const { peerIdentities, loadPeerIdentities } = useContactsStore();
   const { selectAndSendFile } = useFileStore();
   const { startCall } = useCallStore();
   const { members, loadMembers } = useGroupStore();
@@ -48,6 +50,11 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
     }
   }, [currentChat?.id]);
 
+  // Peer mapping is needed to route messages for 1:1 chats
+  useEffect(() => {
+    if (Object.keys(peerIdentities).length === 0) loadPeerIdentities();
+  }, []);
+
   // Close context menu on outside click
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -59,8 +66,13 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
 
   if (!currentChat) return null;
 
-  // Get the peer ID for the current chat (first non-self participant)
-  const peerId = currentChat.participantIds.find((id) => id !== user?.id) || '';
+  // Resolve the network peer for this chat: participant IDs are user
+  // UUIDs that map to libp2p peers via peer_identities. Legacy chats
+  // created from a raw PeerId still work via the fallback.
+  const otherUserId = currentChat.participantIds.find((id) => id !== user?.id) || '';
+  const peerId =
+    peerIdentities[otherUserId]?.peerId ||
+    (otherUserId.startsWith('12D3Koo') ? otherUserId : '');
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;

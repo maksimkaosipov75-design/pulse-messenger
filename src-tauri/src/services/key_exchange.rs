@@ -74,6 +74,14 @@ impl KeyExchangeService {
         }
     }
 
+    /// Remove the X25519 key from the keyring and disk (account reset)
+    pub fn delete_stored_keys(data_dir: &Path) {
+        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_X25519_KEY) {
+            let _ = entry.delete_credential();
+        }
+        let _ = std::fs::remove_file(data_dir.join("x25519.key"));
+    }
+
     /// Test-only constructor that bypasses the OS keyring and key files
     #[cfg(test)]
     pub fn from_secret(static_secret: StaticSecret) -> Self {

@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invokeWithRetry, formatError } from '@/services/api';
 import { toast } from '@/stores/toastStore';
+import { useContactsStore } from '@/stores/contactsStore';
 import i18n from '@/i18n';
 
 interface OutboxItem {
@@ -52,6 +53,7 @@ interface ChatState {
   markRead: (chatId: string) => Promise<void>;
   setupIncomingListener: () => Promise<void>;
   handleIncomingMessage: (message: Message) => void;
+  applyIncomingMessage: (message: Message) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -272,6 +274,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   handleIncomingMessage: (message: Message) => {
+    // Drop messages from blocked contacts
+    const blocked = useContactsStore
+      .getState()
+      .contacts.some((c) => c.user.id === message.senderId && c.isBlocked);
+    if (!blocked) get().applyIncomingMessage(message);
+  },
+
+  applyIncomingMessage: (message: Message) => {
     const { currentChat } = get();
     const isCurrentChat = currentChat?.id === message.chatId;
 
