@@ -54,6 +54,22 @@ interface ChatState {
   setupIncomingListener: () => Promise<void>;
   handleIncomingMessage: (message: Message) => void;
   applyIncomingMessage: (message: Message) => void;
+  /** Delivery ack received for one of our messages */
+  handleDelivered: (messageId: string) => void;
+  /** Network send failed — requeue the message into the outbox */
+  handleSendFailed: (messageId: string) => void;
+}
+
+/** Recently sent network messages, so failures can be requeued */
+const sentRegistry = new Map<string, OutboxItem>();
+const SENT_REGISTRY_CAP = 256;
+
+function registerSent(item: OutboxItem) {
+  sentRegistry.set(item.messageId, item);
+  if (sentRegistry.size > SENT_REGISTRY_CAP) {
+    const oldest = sentRegistry.keys().next().value;
+    if (oldest) sentRegistry.delete(oldest);
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -166,7 +182,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sendChat: async (chatId: string, toPeer: string, content: string, replyToId?: string) => {
     if (toPeer) {
       try {
-        return await get().sendNetworkMessage(chatId, toPeer, content);
+        const message = await get().sendNetworkMessage(chatId, toPeer, content);
+        registerSent({ messageId: message.id, chatId, toPeer, content });
+        return message;
       } catch {
         // Peer unreachable or network down — fall through to local + queue
       }
@@ -194,6 +212,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: item.content,
           messageId: item.messageId,
         });
+        // If the ack never comes, a sendFailed event requeues it
+        registerSent(item);
       } catch {
         stillPending.push(item);
       }
@@ -271,6 +291,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
 
     set({ incomingUnlisten: unlisten });
+  },
+
+  handleDelivered: (messageId: string) => {
+    sentRegistry.delete(messageId);
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, metadata: { ...(m.metadata ?? {}), delivered: true } } : m
+      ),
+    }));
+  },
+
+  handleSendFailed: (messageId: string) => {
+    const item = sentRegistry.get(messageId);
+    if (!item) return;
+    sentRegistry.delete(messageId);
+    if (get().outbox.some((o) => o.messageId === messageId)) return;
+    const outbox = [...get().outbox, item];
+    persistOutbox(outbox);
+    set({ outbox });
+    toast.info(i18n.t('chat.queuedOffline'));
   },
 
   handleIncomingMessage: (message: Message) => {

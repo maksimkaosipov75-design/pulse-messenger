@@ -101,18 +101,46 @@ pub struct PulseBehaviour {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkEvent {
-    PeerConnected { peer_id: String, multiaddr: String },
-    PeerDisconnected { peer_id: String },
-    MessageReceived { from_peer: String, data: Vec<u8> },
-    ListenAddress { address: String },
-    NetworkError { error: String },
+    PeerConnected {
+        peer_id: String,
+        multiaddr: String,
+    },
+    PeerDisconnected {
+        peer_id: String,
+    },
+    MessageReceived {
+        from_peer: String,
+        data: Vec<u8>,
+    },
+    MessageDelivered {
+        peer_id: String,
+        message_id: String,
+    },
+    SendFailed {
+        peer_id: String,
+        message_id: Option<String>,
+        error: String,
+    },
+    ListenAddress {
+        address: String,
+    },
+    NetworkError {
+        error: String,
+    },
 }
 
 // === Commands ===
 
 pub enum NetworkCommand {
-    SendMessage { peer_id: PeerId, data: Vec<u8> },
-    AddPeer { addr: Multiaddr },
+    SendMessage {
+        peer_id: PeerId,
+        data: Vec<u8>,
+        /// App-level message ID for delivery tracking
+        message_id: Option<String>,
+    },
+    AddPeer {
+        addr: Multiaddr,
+    },
     Stop,
 }
 
@@ -178,6 +206,7 @@ pub async fn start_network(
     is_running: Arc<Mutex<bool>>,
     local_peer_id: Arc<Mutex<String>>,
     listen_addr: Option<&str>,
+    keypair: Option<identity::Keypair>,
 ) -> Result<
     (
         mpsc::UnboundedSender<NetworkCommand>,
@@ -188,7 +217,9 @@ pub async fn start_network(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (command_tx, command_rx) = mpsc::unbounded_channel();
 
-    let local_key = identity::Keypair::generate_ed25519();
+    // A persisted keypair keeps the PeerId stable across restarts so
+    // contact codes don't go stale
+    let local_key = keypair.unwrap_or_else(identity::Keypair::generate_ed25519);
     let actual_peer_id = PeerId::from(local_key.public());
 
     // Update shared peer ID
@@ -243,18 +274,24 @@ pub async fn start_network(
 
     tokio::spawn(async move {
         let mut command_rx = command_rx;
+        // OutboundRequestId -> app message id, for delivery acks/failures
+        let mut in_flight: std::collections::HashMap<
+            request_response::OutboundRequestId,
+            Option<String>,
+        > = std::collections::HashMap::new();
         loop {
             tokio::select! {
                 event = swarm.next() => {
                     if let Some(event) = event {
-                        handle_event(event, &mut swarm, &peers, &evt_tx);
+                        handle_event(event, &mut swarm, &peers, &evt_tx, &mut in_flight);
                     }
                 }
                 cmd = command_rx.recv() => {
                     match cmd {
-                        Some(NetworkCommand::SendMessage { peer_id, data }) => {
+                        Some(NetworkCommand::SendMessage { peer_id, data, message_id }) => {
                             log::info!("Sending message to {}: {} bytes", peer_id, data.len());
-                            swarm.behaviour_mut().request_response.send_request(&peer_id, data);
+                            let req_id = swarm.behaviour_mut().request_response.send_request(&peer_id, data);
+                            in_flight.insert(req_id, message_id);
                         }
                         Some(NetworkCommand::AddPeer { addr }) => {
                             log::info!("Dialing {}", addr);
@@ -282,6 +319,7 @@ fn handle_event(
     swarm: &mut libp2p::Swarm<PulseBehaviour>,
     peers: &Arc<Mutex<HashSet<PeerId>>>,
     evt_tx: &mpsc::UnboundedSender<NetworkEvent>,
+    in_flight: &mut std::collections::HashMap<request_response::OutboundRequestId, Option<String>>,
 ) {
     match event {
         SwarmEvent::NewListenAddr { address, .. } => {
@@ -350,18 +388,36 @@ fn handle_event(
         SwarmEvent::Behaviour(PulseBehaviourEvent::RequestResponse(
             request_response::Event::Message {
                 peer,
-                message: Message::Response { response, .. },
+                message:
+                    Message::Response {
+                        request_id,
+                        response,
+                    },
                 ..
             },
         )) => {
             log::info!("ACK from {}: {}", peer, String::from_utf8_lossy(&response));
+            if let Some(Some(message_id)) = in_flight.remove(&request_id) {
+                let _ = evt_tx.send(NetworkEvent::MessageDelivered {
+                    peer_id: peer.to_string(),
+                    message_id,
+                });
+            }
         }
         SwarmEvent::Behaviour(PulseBehaviourEvent::RequestResponse(
-            request_response::Event::OutboundFailure { peer, error, .. },
+            request_response::Event::OutboundFailure {
+                peer,
+                request_id,
+                error,
+                ..
+            },
         )) => {
             log::error!("Send failed to {}: {:?}", peer, error);
-            let _ = evt_tx.send(NetworkEvent::NetworkError {
-                error: format!("Failed to send to {}: {:?}", peer, error),
+            let message_id = in_flight.remove(&request_id).flatten();
+            let _ = evt_tx.send(NetworkEvent::SendFailed {
+                peer_id: peer.to_string(),
+                message_id,
+                error: format!("{:?}", error),
             });
         }
         SwarmEvent::Behaviour(PulseBehaviourEvent::Identify(identify::Event::Received {

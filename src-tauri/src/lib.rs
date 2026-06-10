@@ -413,12 +413,16 @@ fn send_network_message(
     let protocol_msg = ProtocolMessage::TextMessage(envelope);
     let data = encode_message(&protocol_msg)?;
 
-    // Send via network
+    // Send via network, tracked for delivery acks
     let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: Some(message_id.clone()),
+        })
+        .map_err(|e| e.to_string())?;
     } else {
         return Err("Network not started".to_string());
     }
@@ -902,6 +906,7 @@ async fn send_file_message(
         let cmd = command_tx.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = cmd.as_ref() {
             tx.send(NetworkCommand::SendMessage {
+                message_id: None,
                 peer_id,
                 data: offer_data,
             })
@@ -922,6 +927,7 @@ async fn send_file_message(
         let cmd = command_tx.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = cmd.as_ref() {
             tx.send(NetworkCommand::SendMessage {
+                message_id: None,
                 peer_id,
                 data: chunk_bytes,
             })
@@ -938,6 +944,7 @@ async fn send_file_message(
         let cmd = command_tx.lock().map_err(|e| e.to_string())?;
         if let Some(tx) = cmd.as_ref() {
             tx.send(NetworkCommand::SendMessage {
+                message_id: None,
                 peer_id,
                 data: complete_data,
             })
@@ -1048,8 +1055,12 @@ fn send_call_offer(
     let peer_id: libp2p::PeerId = callee_id.parse().map_err(|_| "Invalid callee peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: None,
+        })
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1070,8 +1081,12 @@ fn send_call_answer(
     let peer_id: libp2p::PeerId = caller_id.parse().map_err(|_| "Invalid caller peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: None,
+        })
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1095,8 +1110,12 @@ fn send_ice_candidate(
     let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: None,
+        })
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1120,8 +1139,12 @@ fn send_call_end(
     let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: None,
+        })
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1137,8 +1160,12 @@ fn send_call_reject(
     let peer_id: libp2p::PeerId = to_peer.parse().map_err(|_| "Invalid peer ID")?;
     let cmd = command_tx.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = cmd.as_ref() {
-        tx.send(NetworkCommand::SendMessage { peer_id, data })
-            .map_err(|e| e.to_string())?;
+        tx.send(NetworkCommand::SendMessage {
+            peer_id,
+            data,
+            message_id: None,
+        })
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1152,13 +1179,45 @@ async fn start_network(
     _state: tauri::State<'_, std::sync::Arc<StorageService>>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
+    // Persist the libp2p keypair: a stable PeerId keeps contact codes
+    // valid across restarts
+    let keypair = {
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("No data dir: {}", e))?;
+        let key_path = data_dir.join("p2p.key");
+        match std::fs::read(&key_path)
+            .ok()
+            .and_then(|bytes| libp2p::identity::Keypair::from_protobuf_encoding(&bytes).ok())
+        {
+            Some(kp) => kp,
+            None => {
+                let kp = libp2p::identity::Keypair::generate_ed25519();
+                if let Ok(bytes) = kp.to_protobuf_encoding() {
+                    let _ = std::fs::create_dir_all(&data_dir);
+                    let _ = std::fs::write(&key_path, bytes);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = std::fs::set_permissions(
+                            &key_path,
+                            std::fs::Permissions::from_mode(0o600),
+                        );
+                    }
+                }
+                kp
+            }
+        }
+    };
+
     // Clone shared state, drop lock, then start network (no lock held across await)
     let (peers, is_running, local_peer_id) = {
         let net = network.lock().map_err(|e| e.to_string())?;
         net.clone_state()
     };
     let (tx, mut event_rx) =
-        services::start_network(peers, is_running, local_peer_id, None).await?;
+        services::start_network(peers, is_running, local_peer_id, None, Some(keypair)).await?;
     let peer_id = {
         let net = network.lock().map_err(|e| e.to_string())?;
         net.get_peer_id()
@@ -1634,6 +1693,12 @@ async fn start_network(
                     Err(e) => {
                         log::error!("Failed to decode message from {}: {}", from_peer, e);
                     }
+                }
+            }
+            // Persist delivery confirmations
+            if let NetworkEvent::MessageDelivered { message_id, .. } = &event {
+                if let Some(storage) = app_handle.try_state::<std::sync::Arc<StorageService>>() {
+                    let _ = storage.mark_message_delivered(message_id);
                 }
             }
             // Also emit raw event for the networkStore

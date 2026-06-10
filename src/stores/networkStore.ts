@@ -16,6 +16,8 @@ export interface NetworkEvent {
   peerConnected?: { peerId: string; multiaddr: string };
   peerDisconnected?: { peerId: string };
   messageReceived?: { fromPeer: string; data: number[] };
+  messageDelivered?: { peerId: string; messageId: string };
+  sendFailed?: { peerId: string; messageId: string | null; error: string };
   listenAddress?: { address: string };
   networkError?: { error: string };
 }
@@ -153,7 +155,25 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       }
 
       if (data.listenAddress) {
-        set({ listenAddress: data.listenAddress.address });
+        // Prefer a routable LAN address over loopback for display and
+        // contact codes
+        const addr = data.listenAddress.address;
+        const isLoopback = (a: string) => a.includes('/127.0.0.1/') || a.includes('/::1/');
+        if (!isLoopback(addr) || !get().listenAddress) {
+          set({ listenAddress: addr });
+        }
+      }
+
+      if (data.messageDelivered) {
+        import('@/stores/chatStore').then(({ useChatStore }) =>
+          useChatStore.getState().handleDelivered(data.messageDelivered!.messageId)
+        );
+      }
+
+      if (data.sendFailed?.messageId) {
+        import('@/stores/chatStore').then(({ useChatStore }) =>
+          useChatStore.getState().handleSendFailed(data.sendFailed!.messageId!)
+        );
       }
 
       if (data.messageReceived) {

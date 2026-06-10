@@ -576,6 +576,34 @@ impl StorageService {
         Ok(())
     }
 
+    /// Record a delivery ack on a stored message (metadata.delivered = true)
+    pub fn mark_message_delivered(&self, message_id: &str) -> Result<(), String> {
+        let db = self.db.lock().map_err(|e| e.to_string())?;
+        let row: Option<(String, Vec<u8>)> = db
+            .query_row(
+                "SELECT chat_id, data FROM messages WHERE id = ?1",
+                params![message_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+        let Some((chat_id, data)) = row else {
+            return Ok(()); // unknown message — ack arrived after deletion
+        };
+        let Ok(mut msg) = bincode::deserialize::<Message>(&data) else {
+            return Ok(());
+        };
+        let mut meta = msg.metadata.take().unwrap_or_else(|| serde_json::json!({}));
+        meta["delivered"] = serde_json::Value::Bool(true);
+        msg.metadata = Some(meta);
+        let new_data = bincode::serialize(&msg).map_err(|e| e.to_string())?;
+        db.execute(
+            "UPDATE messages SET data = ?1 WHERE chat_id = ?2 AND id = ?3",
+            params![new_data, chat_id, message_id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // === Peer Identities (user_id <-> libp2p peer) ===
 
     pub fn save_peer_identity(

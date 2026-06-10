@@ -449,11 +449,16 @@ function MessageBubble({
           <span className="text-xs">
             {format(new Date(message.timestamp), 'HH:mm', { locale: i18n.language === 'en' ? enUS : ru })}
           </span>
-          {isOwn && (
-            <span className="text-xs">{message.isRead ? '✓✓' : '✓'}</span>
-          )}
+          {isOwn && <DeliveryStatus message={message} />}
         </div>
       </div>
     </div>
   );
+}
+
+/** Honest delivery state: queued -> sent -> acked by the peer */
+function DeliveryStatus({ message }: { message: Message }) {
+  const queued = useChatStore((s) => s.outbox.some((o) => o.messageId === message.id));
+  const delivered = (message.metadata as { delivered?: boolean } | null)?.delivered;
+  return <span className="text-xs">{queued ? '🕓' : delivered ? '✓✓' : '✓'}</span>;
 }
