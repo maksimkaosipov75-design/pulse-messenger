@@ -1818,6 +1818,9 @@ async fn start_network(
                                 "callType": serde_json::to_value(&call_type).unwrap_or_default(),
                                 "sdp": sdp,
                                 "timestamp": timestamp,
+                                // libp2p peer for return signaling — caller_id
+                                // is a user UUID and cannot be dialed
+                                "fromPeer": from_peer.to_string(),
                             }),
                         );
                     }

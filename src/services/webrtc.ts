@@ -300,10 +300,11 @@ class WebRTCService {
         callType: { Audio?: {}; Video?: {} };
         sdp: string;
         timestamp: number;
+        fromPeer: string;
       }>('call-offer', (event) => {
         const p = event.payload;
         const callType: CallType = p.callType.Video ? 'video' : 'audio';
-        this.handleOffer(p.callId, p.chatId, p.callerId, p.callerName, callType, p.sdp);
+        this.handleOffer(p.callId, p.chatId, p.fromPeer, p.callerName, callType, p.sdp);
       })
     );
 
