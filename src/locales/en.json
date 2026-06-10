@@ -40,7 +40,8 @@
     "unknownUser": "Unknown user",
     "selectFile": "Select file",
     "queuedOffline": "Message will be sent when the peer is online",
-    "queueFlushed": "Sent {{count}} queued message(s)"
+    "queueFlushed": "Sent {{count}} queued message(s)",
+    "offline": "offline"
   },
   "chatList": {
     "newChat": "New chat",

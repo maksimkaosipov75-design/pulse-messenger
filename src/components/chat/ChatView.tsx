@@ -1,6 +1,7 @@
 import { useChatStore } from '@/stores/chatStore';
 import { useUserStore } from '@/stores/userStore';
 import { useContactsStore } from '@/stores/contactsStore';
+import { useNetworkStore } from '@/stores/networkStore';
 import { useFileStore } from '@/stores/fileStore';
 import { useCallStore } from '@/stores/callStore';
 import { useGroupStore } from '@/stores/groupStore';
@@ -18,6 +19,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const { currentChat, messages, sendChat, deleteMessage, markRead, loadMoreMessages, isLoadingMessages } = useChatStore();
   const { user } = useUserStore();
   const { peerIdentities, loadPeerIdentities } = useContactsStore();
+  const connectedPeers = useNetworkStore((s) => s.peers);
   const { selectAndSendFile } = useFileStore();
   const { startCall } = useCallStore();
   const { members, loadMembers } = useGroupStore();
@@ -73,6 +75,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const peerId =
     peerIdentities[otherUserId]?.peerId ||
     (otherUserId.startsWith('12D3Koo') ? otherUserId : '');
+  const peerOnline = !!peerId && connectedPeers.includes(peerId);
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -245,7 +248,9 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {currentChat.chatType === 'group'
                   ? t('chat.members', { count: currentChat.participantIds.length })
-                  : t('chat.online')}
+                  : peerOnline
+                  ? t('chat.online')
+                  : t('chat.offline')}
               </p>
             </div>
           </div>
