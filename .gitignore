@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Local data / secrets — never commit keys
+*.key
+*.pem
+.env
+.env.*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.log
