@@ -1,55 +1,101 @@
 import { useNetworkStore } from '@/stores/networkStore';
-import { Wifi, WifiOff, Loader2, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+function MonoField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div>
+      <p className="text-[11.5px] text-ink-faint mb-1">{label}</p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 text-[11.5px] font-mono text-ink-dim bg-surface px-2.5 py-1.5 rounded-em-sm truncate">
+          {value}
+        </code>
+        <button
+          onClick={copy}
+          className="p-1.5 rounded-em-sm hover:bg-surface transition-colors flex-shrink-0"
+        >
+          {copied ? (
+            <Check size={14} className="text-online" />
+          ) : (
+            <Copy size={14} className="text-ink-faint" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function ConnectionStatus() {
   const { t } = useTranslation();
   const { status, peerCount, localPeerId, listenAddress, error, startNetwork, stopNetwork, connectPeer } =
     useNetworkStore();
-  const [showConnect, setShowConnect] = useState(false);
   const [connectAddr, setConnectAddr] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyPeerId = () => {
-    if (localPeerId) {
-      navigator.clipboard.writeText(localPeerId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const handleConnect = async () => {
     if (connectAddr.trim()) {
       await connectPeer(connectAddr.trim());
       setConnectAddr('');
-      setShowConnect(false);
     }
   };
 
   return (
-    <div className="bg-elev rounded-em-md p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center space-x-2">
-          {status === 'online' ? (
-            <Wifi size={18} className="text-online" />
-          ) : status === 'starting' ? (
-            <Loader2 size={18} className="text-warn animate-spin" />
-          ) : (
-            <WifiOff size={18} className="text-ink-faint" />
-          )}
-          <span className="text-sm font-medium text-ink">
-            {status === 'online'
-              ? t('status.online', { count: peerCount })
-              : status === 'starting'
-              ? t('status.starting')
-              : t('status.offline')}
-          </span>
+    <div>
+      <div className="grid md:grid-cols-2 gap-x-5 gap-y-2.5">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className="text-[13.5px] text-ink-dim">{t('status.statusLabel')}</span>
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface text-[11px] font-semibold">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  status === 'online' ? 'bg-online' : status === 'starting' ? 'bg-warn' : 'bg-ink-faint'
+                }`}
+              />
+              {status === 'online'
+                ? t('status.onlineChip', { count: peerCount })
+                : status === 'starting'
+                ? t('status.starting')
+                : t('status.offline')}
+            </span>
+          </div>
+          {localPeerId && <MonoField label={t('status.peerId')} value={localPeerId} />}
         </div>
 
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className="text-[13.5px] text-ink-dim">{t('status.discovery')}</span>
+            <span className="text-[12.5px] font-bold text-ink-dim">mDNS · {t('status.lan')}</span>
+          </div>
+          {listenAddress && <MonoField label={t('status.listenAddr')} value={listenAddress} />}
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-danger mt-3">{error}</p>}
+
+      <div className="flex items-center gap-2 mt-4">
+        <input
+          value={connectAddr}
+          onChange={(e) => setConnectAddr(e.target.value)}
+          placeholder={t('status.addressPlaceholder')}
+          className="flex-1 text-[12px] font-mono px-3 py-2 bg-surface rounded-em-sm placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
+          onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+        />
+        <button
+          onClick={handleConnect}
+          disabled={!connectAddr.trim()}
+          className="px-3.5 py-2 text-[12.5px] font-bold bg-surface rounded-em-sm hover:bg-surface-2 disabled:opacity-40 transition-colors"
+        >
+          {t('status.connectToPeer')}
+        </button>
         <button
           onClick={status === 'online' ? stopNetwork : startNetwork}
-          className={`px-3 py-1 text-xs rounded-em-sm transition-colors ${
+          className={`px-3.5 py-2 text-[12.5px] font-bold rounded-em-sm transition ${
             status === 'online'
               ? 'bg-danger-soft text-danger hover:brightness-110'
               : 'bg-accent-soft text-accent hover:brightness-110'
@@ -58,70 +104,6 @@ export function ConnectionStatus() {
           {status === 'online' ? t('status.stop') : t('status.connect')}
         </button>
       </div>
-
-      {localPeerId && (
-        <div className="mb-3">
-          <p className="text-xs text-ink-dim mb-1">{t('status.peerId')}</p>
-          <div className="flex items-center gap-2">
-            <code className="text-xs text-ink-dim bg-surface px-2 py-1 rounded flex-1 truncate">
-              {localPeerId}
-            </code>
-            <button
-              onClick={handleCopyPeerId}
-              className="p-1.5 rounded hover:bg-surface transition-colors"
-              title={t('status.copyPeerId')}
-            >
-              {copied ? (
-                <Check size={14} className="text-online" />
-              ) : (
-                <Copy size={14} className="text-ink-faint" />
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {listenAddress && (
-        <div className="mb-3">
-          <p className="text-xs text-ink-dim mb-1">Listen</p>
-          <code className="text-xs text-ink-dim bg-surface px-2 py-1 rounded block truncate">
-            {listenAddress}
-          </code>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-xs text-danger mb-3">{error}</p>
-      )}
-
-      {status === 'online' && (
-        <div>
-          <button
-            onClick={() => setShowConnect(!showConnect)}
-            className="text-xs text-accent hover:text-accent transition-colors"
-          >
-            {t('status.connectToPeer')}
-          </button>
-
-          {showConnect && (
-            <div className="mt-2 flex gap-2">
-              <input
-                value={connectAddr}
-                onChange={(e) => setConnectAddr(e.target.value)}
-                placeholder={t('status.addressPlaceholder')}
-                className="flex-1 text-xs px-2 py-1.5 bg-surface border rounded-em-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-              />
-              <button
-                onClick={handleConnect}
-                className="px-3 py-1.5 text-xs bg-accent text-accent-ink rounded-em-sm hover:brightness-110 transition-colors"
-              >
-                OK
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

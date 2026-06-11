@@ -117,7 +117,11 @@
     "account": "Аккаунт",
     "logout": "Выйти",
     "deleteAccount": "Удалить аккаунт",
-    "fingerprint": "Отпечаток ключа"
+    "fingerprint": "Отпечаток ключа",
+    "light": "Светлая",
+    "dark": "Тёмная",
+    "accent": "Акцент",
+    "fingerprintHint": "Сверьте identicon и отпечаток с собеседником по доверенному каналу."
   },
   "contacts": {
     "title": "Контакты",
@@ -178,7 +182,12 @@
     "connectToPeer": "Подключиться к пиру",
     "addressPlaceholder": "Multiaddr пира",
     "offlineBanner": "Нет подключения к сети",
-    "reconnect": "Переподключиться"
+    "reconnect": "Переподключиться",
+    "statusLabel": "Статус",
+    "onlineChip": "в сети · {{count}} пира",
+    "discovery": "Обнаружение",
+    "lan": "локальная сеть",
+    "listenAddr": "адрес для подключения"
   },
   "call": {
     "audio": "Аудиозвонок",

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useContactsStore } from '@/stores/contactsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUserStore } from '@/stores/userStore';
-import { Search, UserPlus, Trash2, Ban, MessageCircle, QrCode } from 'lucide-react';
+import { useNetworkStore } from '@/stores/networkStore';
+import { Search, UserPlus, Trash2, Ban, MessageCircle, QrCode, Phone } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Contact } from '@/types';
 import { MyCodeDialog } from '@/components/contacts/MyCodeDialog';
 import { AddContactDialog } from '@/components/contacts/AddContactDialog';
+import { useCallStore } from '@/stores/callStore';
 
 export function ContactsPage() {
   const { t } = useTranslation();
@@ -32,80 +34,102 @@ export function ContactsPage() {
       )
     : contacts;
 
-  const handleStartChat = async (contact: Contact) => {
-    if (!user) return;
-    // Reuse the existing 1:1 chat if there is one
+  const findOrCreateChat = async (contact: Contact) => {
+    if (!user) return null;
     const existing = chats.find(
       (c) => c.chatType === 'private' && c.participantIds.includes(contact.user.id)
     );
-    const chat =
+    return (
       existing ??
       (await createChat('private', contact.user.displayName || contact.user.username, [
         user.id,
         contact.user.id,
-      ]));
+      ]))
+    );
+  };
+
+  const handleStartChat = async (contact: Contact) => {
+    const chat = await findOrCreateChat(contact);
+    if (!chat) return;
     navigate('/');
     useChatStore.getState().setCurrentChat(chat);
   };
 
+  const handleCall = async (contact: Contact) => {
+    if (!user) return;
+    const chat = await findOrCreateChat(contact);
+    if (!chat) return;
+    const peerId = useContactsStore.getState().peerIdentities[contact.user.id]?.peerId;
+    if (!peerId) return;
+    const callerName = user.displayName || user.username;
+    await useCallStore
+      .getState()
+      .startCall(chat.id, peerId, contact.user.displayName || contact.user.username, 'audio', user.id, callerName);
+  };
+
   return (
-    <div className="h-full flex flex-col bg-bg">
-      <div className="p-4 bg-elev border-b">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-ink">{t('contacts.title')}</h1>
-          <div className="flex gap-1">
-            <button
-              onClick={() => setShowMyCode(true)}
-              className="p-2 rounded-em-sm hover:bg-surface"
-              title={t('contacts.myCode')}
-            >
-              <QrCode size={20} className="text-ink-dim" />
-            </button>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="p-2 rounded-em-sm hover:bg-surface"
-              title={t('contacts.addTitle')}
-            >
-              <UserPlus size={20} className="text-ink-dim" />
-            </button>
-          </div>
+    <div className="h-full overflow-y-auto bg-bg">
+      <div className="max-w-[680px] mx-auto px-6 py-7">
+        {/* Header: title + counter + actions */}
+        <div className="flex items-center gap-3 mb-5">
+          <h1 className="text-[22px] font-extrabold tracking-tight">{t('contacts.title')}</h1>
+          <span className="px-2 py-0.5 rounded-full bg-surface text-xs font-bold text-ink-dim">
+            {contacts.length}
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={() => setShowMyCode(true)}
+            className="flex items-center gap-[7px] px-3.5 py-2 text-[13.5px] font-bold bg-surface rounded-em-md hover:bg-surface-2 transition-colors"
+          >
+            <QrCode size={15} /> {t('contacts.myCode')}
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-[7px] px-3.5 py-2 text-[13.5px] font-extrabold bg-accent text-accent-ink rounded-em-md hover:brightness-110 transition"
+          >
+            <UserPlus size={15} /> {t('contacts.add')}
+          </button>
         </div>
 
-        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
-        {showAdd && <AddContactDialog onClose={() => setShowAdd(false)} />}
-
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('contacts.searchPlaceholder')}
-            className="w-full pl-9 pr-3 py-2 bg-surface rounded-em-sm text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full pl-10 pr-3 py-2.5 bg-elev border rounded-em-md text-[14.5px] placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex justify-center items-center h-32">
-            <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-ink-faint">
-            <UserPlus size={48} className="mb-3 opacity-50" />
-            <p className="text-sm">{t('contacts.noContacts')}</p>
-          </div>
-        ) : (
-          filtered.map((contact) => (
-            <ContactItem
-              key={contact.user.id}
-              contact={contact}
-              onStartChat={() => handleStartChat(contact)}
-              onRemove={() => removeContact(contact.user.id)}
-              onBlock={(blocked) => blockContact(contact.user.id, blocked)}
-            />
-          ))
-        )}
+        {/* List */}
+        <div className="bg-elev border rounded-em-lg overflow-hidden">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-ink-faint">
+              <UserPlus size={44} className="mb-3 opacity-50" />
+              <p className="text-sm">{t('contacts.noContacts')}</p>
+            </div>
+          ) : (
+            filtered.map((contact, i) => (
+              <ContactItem
+                key={contact.user.id}
+                contact={contact}
+                divider={i > 0}
+                onStartChat={() => handleStartChat(contact)}
+                onCall={() => handleCall(contact)}
+                onRemove={() => removeContact(contact.user.id)}
+                onBlock={(blocked) => blockContact(contact.user.id, blocked)}
+              />
+            ))
+          )}
+        </div>
+
+        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
+        {showAdd && <AddContactDialog onClose={() => setShowAdd(false)} />}
       </div>
     </div>
   );
@@ -113,54 +137,81 @@ export function ContactsPage() {
 
 function ContactItem({
   contact,
+  divider,
   onStartChat,
+  onCall,
   onRemove,
   onBlock,
 }: {
   contact: Contact;
+  divider: boolean;
   onStartChat: () => void;
+  onCall: () => void;
   onRemove: () => void;
   onBlock: (blocked: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const peerIdentities = useContactsStore((s) => s.peerIdentities);
+  const connectedPeers = useNetworkStore((s) => s.peers);
   const u = contact.user;
   const displayName = contact.nickname || u.displayName || u.username;
+  const peerId = peerIdentities[u.id]?.peerId;
+  const online = !!peerId && connectedPeers.includes(peerId);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-surface transition-colors">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold">{displayName[0]?.toUpperCase()}</span>
+    <div
+      className={`group flex items-center gap-[13px] px-4 py-3 hover:bg-surface transition-colors ${
+        divider ? 'border-t' : ''
+      }`}
+    >
+      <div className="relative flex-shrink-0">
+        <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center">
+          <span className="text-[17px] font-bold text-ink">{displayName[0]?.toUpperCase()}</span>
         </div>
-        <div className="min-w-0">
-          <p className={`text-sm font-medium truncate ${contact.isBlocked ? 'text-ink-faint line-through' : 'text-ink'}`}>
-            {displayName}
-          </p>
-          <p className="text-xs text-ink-dim truncate">@{u.username}</p>
-        </div>
+        {online && (
+          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-online border-2 border-elev" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className={`text-[15px] font-bold truncate ${
+            contact.isBlocked ? 'text-ink-faint line-through' : ''
+          }`}
+        >
+          {displayName}
+        </p>
+        <p className="text-[12.5px] text-ink-dim truncate">@{u.username}</p>
       </div>
 
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         <button
           onClick={onStartChat}
-          className="p-2 rounded-em-sm hover:bg-surface"
+          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
           title={t('contacts.startChat')}
         >
-          <MessageCircle size={18} className="text-ink-faint" />
+          <MessageCircle size={17} className="text-ink-dim" />
+        </button>
+        <button
+          onClick={onCall}
+          disabled={!online}
+          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors disabled:opacity-30"
+          title={t('chat.audioCall')}
+        >
+          <Phone size={17} className="text-ink-dim" />
         </button>
         <button
           onClick={() => onBlock(!contact.isBlocked)}
-          className="p-2 rounded-em-sm hover:bg-surface"
+          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
           title={contact.isBlocked ? t('contacts.unblock') : t('contacts.block')}
         >
-          <Ban size={18} className={contact.isBlocked ? 'text-danger' : 'text-ink-faint'} />
+          <Ban size={17} className={contact.isBlocked ? 'text-danger' : 'text-ink-dim'} />
         </button>
         <button
           onClick={onRemove}
-          className="p-2 rounded-em-sm hover:bg-surface"
+          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
           title={t('contacts.remove')}
         >
-          <Trash2 size={18} className="text-ink-faint" />
+          <Trash2 size={17} className="text-ink-dim" />
         </button>
       </div>
     </div>

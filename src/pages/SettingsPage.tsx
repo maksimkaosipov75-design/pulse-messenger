@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUserStore } from '@/stores/userStore';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -7,29 +7,35 @@ import {
   Sun,
   Moon,
   Bell,
-  BellOff,
-  Volume2,
-  VolumeX,
-  Globe,
   Palette,
   User,
   Shield,
   Wifi,
-  Info,
   LogOut,
   QrCode,
   Trash2,
+  Pencil,
+  Check,
+  Lock,
 } from 'lucide-react';
 import { MyCodeDialog } from '@/components/contacts/MyCodeDialog';
 import { Identicon } from '@/components/Identicon';
 
+const ACCENTS: { id: string; color: string }[] = [
+  { id: 'orange', color: '#FF7A45' },
+  { id: 'telegram', color: '#2AABEE' },
+  { id: 'purple', color: '#7C5CFF' },
+  { id: 'green', color: '#19C37D' },
+  { id: 'red', color: '#F25F8E' },
+];
+
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { settings, themes, setTheme, toggleDark, updateSettings } = useSettingsStore();
+  const { settings, setTheme, toggleDark, updateSettings } = useSettingsStore();
   const { user, updateProfile, logout, deleteAccount } = useUserStore();
+  const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
-  const [saved, setSaved] = useState(false);
   const [showMyCode, setShowMyCode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -38,260 +44,254 @@ export function SettingsPage() {
       displayName: displayName.trim() || undefined,
       bio: bio.trim() || undefined,
     });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setEditing(false);
   };
+
+  const fingerprint = (user?.publicKey || '')
+    .slice(0, 16)
+    .replace(/(.{4})/g, '$1 ')
+    .trim();
 
   return (
     <div className="h-full overflow-y-auto bg-bg">
-      <div className="max-w-[880px] mx-auto p-6">
+      <div className="max-w-[880px] mx-auto px-6 py-7">
         <h1 className="text-[22px] font-extrabold tracking-tight mb-5">{t('settings.title')}</h1>
-        <div className="grid md:grid-cols-2 gap-4 items-start">
 
-        {/* Profile */}
-        <Section icon={<User size={20} />} title={t('settings.profile')}>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center text-white text-2xl font-bold">
+        <div className="grid md:grid-cols-2 gap-[14px] items-start">
+          {/* Профиль */}
+          <Card icon={<User size={16} />} title={t('settings.profile')}>
+            <div className="flex items-center gap-[13px]">
+              <div className="w-14 h-14 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[22px] font-bold flex-shrink-0">
                 {(user?.displayName || user?.username || '?')[0]?.toUpperCase()}
               </div>
-              <div>
-                <p className="font-medium text-ink">
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-extrabold truncate">
                   {user?.displayName || user?.username}
                 </p>
-                <p className="text-sm text-ink-dim">
-                  @{user?.username}
-                </p>
+                <p className="text-[12.5px] text-ink-dim">@{user?.username}</p>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-ink-dim mb-1">{t('settings.displayName')}</label>
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-ink-dim mb-1">{t('settings.bio')}</label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none resize-none"
-              />
-            </div>
-
-            <button
-              onClick={handleSaveProfile}
-              className="px-4 py-2 bg-accent text-accent-ink text-sm rounded-em-sm hover:brightness-110 transition-colors"
-            >
-              {saved ? t('settings.profileSaved') : t('group.save')}
-            </button>
-          </div>
-        </Section>
-
-        {/* Appearance */}
-        <Section icon={<Palette size={20} />} title={t('settings.appearance')}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-ink-dim">{t('settings.darkMode')}</span>
               <button
-                onClick={toggleDark}
-                className="p-2 rounded-em-sm bg-surface-2 hover:bg-gray-300 dark:hover:bg-surface-2 transition-colors"
+                onClick={() => setEditing(!editing)}
+                className="p-2 rounded-em-sm hover:bg-surface text-ink-dim transition-colors"
               >
-                {settings.isDark ? <Moon size={18} /> : <Sun size={18} />}
+                <Pencil size={16} />
               </button>
             </div>
 
-            <div>
-              <p className="text-sm text-ink-dim mb-2">{t('settings.theme')}</p>
-              <div className="flex gap-2">
-                {themes.map((theme) => (
-                  <button
-                    key={theme.id}
-                    onClick={() => setTheme(theme.id)}
-                    className={`w-10 h-10 rounded-full border-2 transition-all ${
-                      settings.theme === theme.id
-                        ? 'border-ink scale-110'
-                        : 'border-transparent hover:scale-105'
-                    }`}
-                    style={{ backgroundColor: theme.color }}
-                    title={theme.name}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        {/* Notifications */}
-        <Section icon={<Bell size={20} />} title={t('settings.notifications')}>
-          <div className="space-y-3">
-            <ToggleRow
-              icon={settings.notificationsEnabled ? <Bell size={18} /> : <BellOff size={18} />}
-              label={t('settings.enableNotifications')}
-              checked={settings.notificationsEnabled}
-              onChange={(v) => updateSettings({ notificationsEnabled: v })}
-            />
-            <ToggleRow
-              icon={settings.soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-              label={t('settings.notificationSounds')}
-              checked={settings.soundEnabled}
-              onChange={(v) => updateSettings({ soundEnabled: v })}
-            />
-          </div>
-        </Section>
-
-        {/* Language */}
-        <Section icon={<Globe size={20} />} title={t('settings.language')}>
-          <select
-            value={settings.language}
-            onChange={(e) => {
-              updateSettings({ language: e.target.value });
-            }}
-            className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
-          >
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
-          </select>
-        </Section>
-
-        {/* Security */}
-        <Section icon={<Shield size={20} />} title={t('settings.security')}>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-ink-dim">{t('settings.encryption')}</span>
-              <span className="text-xs text-online font-medium">{t('settings.encryptionEnabled')}</span>
-            </div>
-            {user?.publicKey && (
-              <div className="flex items-start gap-3">
-                <Identicon value={user.publicKey} size={48} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-ink-dim mb-1">{t('settings.fingerprint')}</p>
-                  <code className="text-xs font-mono text-ink-dim bg-surface px-2 py-1 rounded-em-sm block break-all">
-                    {user.publicKey.slice(0, 16)}
-                  </code>
-                </div>
-              </div>
-            )}
-          </div>
-        </Section>
-
-        {/* Network — на всю ширину */}
-        <div className="md:col-span-2">
-          <Section icon={<Wifi size={20} />} title={t('settings.network')}>
-            <ConnectionStatus />
-          </Section>
-        </div>
-
-        {/* Account */}
-        <Section icon={<LogOut size={20} />} title={t('settings.account')}>
-          <div className="space-y-2">
-            <button
-              onClick={() => setShowMyCode(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-dim rounded-em-sm hover:bg-surface transition-colors"
-            >
-              <QrCode size={16} />
-              {t('contacts.myCode')}
-            </button>
-            <button
-              onClick={logout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-dim rounded-em-sm hover:bg-surface transition-colors"
-            >
-              <LogOut size={16} />
-              {t('settings.logout')}
-            </button>
-            {confirmDelete ? (
-              <div className="p-3 bg-danger-soft rounded-em-sm">
-                <p className="text-sm text-danger mb-2">{t('profile.resetWarning')}</p>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    className="px-3 py-1.5 text-sm text-ink-dim hover:text-ink"
-                  >
-                    {t('group.cancel')}
-                  </button>
-                  <button
-                    onClick={deleteAccount}
-                    className="px-3 py-1.5 text-sm bg-danger text-white rounded-em-sm hover:brightness-110"
-                  >
-                    {t('profile.resetConfirm')}
-                  </button>
-                </div>
+            {editing ? (
+              <div className="mt-4 space-y-2.5">
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder={t('settings.displayName')}
+                  className="w-full px-3 py-2 bg-surface rounded-em-sm text-sm focus:ring-2 focus:ring-accent focus:outline-none"
+                />
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={2}
+                  placeholder={t('settings.bio')}
+                  className="w-full px-3 py-2 bg-surface rounded-em-sm text-sm focus:ring-2 focus:ring-accent focus:outline-none resize-none"
+                />
+                <button
+                  onClick={handleSaveProfile}
+                  className="px-4 py-1.5 bg-accent text-accent-ink text-[13px] font-bold rounded-em-sm hover:brightness-110 transition"
+                >
+                  {t('group.save')}
+                </button>
               </div>
             ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger rounded-em-sm hover:bg-danger-soft transition-colors"
-              >
-                <Trash2 size={16} />
-                {t('settings.deleteAccount')}
-              </button>
+              <div className="mt-4">
+                <p className="text-[11.5px] text-ink-faint mb-0.5">{t('settings.bio')}</p>
+                <p className="text-[13.5px] text-ink-dim">{user?.bio || '—'}</p>
+              </div>
             )}
-          </div>
-        </Section>
+          </Card>
 
+          {/* Уведомления и звук */}
+          <Card icon={<Bell size={16} />} title={t('settings.notifications')}>
+            <Row label={t('settings.enableNotifications')}>
+              <Switch
+                checked={settings.notificationsEnabled}
+                onChange={(v) => updateSettings({ notificationsEnabled: v })}
+              />
+            </Row>
+            <Row label={t('settings.notificationSounds')}>
+              <Switch
+                checked={settings.soundEnabled}
+                onChange={(v) => updateSettings({ soundEnabled: v })}
+              />
+            </Row>
+            <Row label={t('settings.language')}>
+              <select
+                value={settings.language}
+                onChange={(e) => updateSettings({ language: e.target.value })}
+                className="bg-surface px-2.5 py-1 rounded-em-sm text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+              >
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+              </select>
+            </Row>
+          </Card>
+
+          {/* Внешний вид */}
+          <Card icon={<Palette size={16} />} title={t('settings.appearance')}>
+            <Row label={t('settings.theme')}>
+              <div className="flex gap-1 p-0.5 bg-surface rounded-full">
+                <button
+                  onClick={() => settings.isDark && toggleDark()}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12.5px] font-bold transition-colors ${
+                    !settings.isDark ? 'bg-accent-soft text-accent' : 'text-ink-dim'
+                  }`}
+                >
+                  <Sun size={13} /> {t('settings.light')}
+                </button>
+                <button
+                  onClick={() => !settings.isDark && toggleDark()}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12.5px] font-bold transition-colors ${
+                    settings.isDark ? 'bg-accent-soft text-accent' : 'text-ink-dim'
+                  }`}
+                >
+                  <Moon size={13} /> {t('settings.dark')}
+                </button>
+              </div>
+            </Row>
+            <Row label={t('settings.accent')}>
+              <div className="flex gap-2">
+                {ACCENTS.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setTheme(a.id)}
+                    className="w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+                    style={{ backgroundColor: a.color }}
+                    title={t(`theme.${a.id}`)}
+                  >
+                    {settings.theme === a.id && <Check size={13} className="text-white" />}
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </Card>
+
+          {/* Безопасность */}
+          <Card icon={<Shield size={16} />} title={t('settings.security')}>
+            <Row label={t('settings.encryption')}>
+              <span className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-online">
+                <Lock size={12} /> {t('settings.encryptionEnabled')}
+              </span>
+            </Row>
+            {user?.publicKey && (
+              <div className="flex items-center gap-3 mt-3">
+                <Identicon value={user.publicKey} size={44} />
+                <div className="min-w-0">
+                  <p className="text-[11.5px] text-ink-faint mb-0.5">
+                    {t('settings.fingerprint')} · Ed25519
+                  </p>
+                  <code className="text-[13px] font-mono text-ink">{fingerprint}</code>
+                </div>
+              </div>
+            )}
+            <p className="text-[11.5px] text-ink-faint mt-3">{t('settings.fingerprintHint')}</p>
+          </Card>
+
+          {/* Сеть — на всю ширину */}
+          <div className="md:col-span-2">
+            <Card icon={<Wifi size={16} />} title={t('settings.network')}>
+              <ConnectionStatus />
+            </Card>
+          </div>
+
+          {/* Аккаунт */}
+          <div className="md:col-span-2">
+            <Card icon={<LogOut size={16} />} title={t('settings.account')}>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setShowMyCode(true)}
+                  className="flex items-center gap-2 px-3.5 py-2 text-[13.5px] font-bold bg-surface rounded-em-md hover:bg-surface-2 transition-colors"
+                >
+                  <QrCode size={15} /> {t('contacts.myCode')}
+                </button>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-3.5 py-2 text-[13.5px] font-bold bg-surface rounded-em-md hover:bg-surface-2 transition-colors"
+                >
+                  <LogOut size={15} /> {t('settings.logout')}
+                </button>
+                <div className="flex-1" />
+                {confirmDelete ? (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-danger-soft rounded-em-md">
+                    <span className="text-[12.5px] text-danger">{t('profile.resetWarning')}</span>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="px-2.5 py-1 text-[12.5px] text-ink-dim hover:text-ink"
+                    >
+                      {t('group.cancel')}
+                    </button>
+                    <button
+                      onClick={deleteAccount}
+                      className="px-2.5 py-1 text-[12.5px] font-bold bg-danger text-white rounded-em-sm hover:brightness-110"
+                    >
+                      {t('profile.resetConfirm')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 text-[13.5px] font-bold text-danger bg-danger-soft rounded-em-md hover:brightness-110 transition"
+                  >
+                    <Trash2 size={15} /> {t('settings.deleteAccount')}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11.5px] text-ink-faint mt-3">{t('settings.appVersion')}</p>
+            </Card>
+          </div>
         </div>
-        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
 
-        {/* About */}
-        <Section icon={<Info size={20} />} title={t('settings.about')}>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-ink-dim">{t('settings.version')}</span>
-              <span className="text-sm text-ink-dim">{t('settings.appVersion')}</span>
-            </div>
-          </div>
-        </Section>
+        {showMyCode && <MyCodeDialog onClose={() => setShowMyCode(false)} />}
       </div>
     </div>
   );
 }
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Card({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <div className="bg-elev rounded-em-md p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-accent">{icon}</span>
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
+    <div className="bg-elev border rounded-em-lg p-4">
+      <div className="flex items-center gap-[9px] mb-3.5">
+        <span className="w-7 h-7 rounded-em-sm bg-accent-soft text-accent flex items-center justify-center">
+          {icon}
+        </span>
+        <h2 className="text-[15px] font-extrabold">{title}</h2>
       </div>
       {children}
     </div>
   );
 }
 
-function ToggleRow({
-  icon,
-  label,
-  checked,
-  onChange,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="text-ink-dim">{icon}</span>
-        <span className="text-sm text-ink-dim">{label}</span>
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-accent' : 'bg-gray-300 dark:bg-surface-2'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-            checked ? 'translate-x-5' : ''
-          }`}
-        />
-      </button>
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-[13.5px] text-ink-dim">{label}</span>
+      {children}
     </div>
+  );
+}
+
+function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
+      className={`w-10 h-[22px] rounded-full p-[3px] transition-colors ${
+        checked ? 'bg-accent' : 'bg-surface-2'
+      }`}
+    >
+      <span
+        className={`block w-4 h-4 rounded-full bg-white transition-transform ${
+          checked ? 'translate-x-[18px]' : ''
+        }`}
+      />
+    </button>
   );
 }

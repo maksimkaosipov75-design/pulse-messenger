@@ -117,7 +117,11 @@
     "account": "Account",
     "logout": "Log out",
     "deleteAccount": "Delete account",
-    "fingerprint": "Key fingerprint"
+    "fingerprint": "Key fingerprint",
+    "light": "Light",
+    "dark": "Dark",
+    "accent": "Accent",
+    "fingerprintHint": "Compare the identicon and fingerprint with your contact over a trusted channel."
   },
   "contacts": {
     "title": "Contacts",
@@ -178,7 +182,12 @@
     "connectToPeer": "Connect to peer",
     "addressPlaceholder": "Peer multiaddr",
     "offlineBanner": "No network connection",
-    "reconnect": "Reconnect"
+    "reconnect": "Reconnect",
+    "statusLabel": "Status",
+    "onlineChip": "online · {{count}} peers",
+    "discovery": "Discovery",
+    "lan": "local network",
+    "listenAddr": "connection address"
   },
   "call": {
     "audio": "Audio call",
