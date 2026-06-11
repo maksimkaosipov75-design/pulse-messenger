@@ -112,26 +112,26 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 border-l border-gray-700">
+    <div className="h-full flex flex-col bg-elev border-l">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
         <h2 className="text-lg font-semibold text-white">{t('group.settings')}</h2>
-        <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
-          <X size={20} className="text-gray-400" />
+        <button onClick={onClose} className="p-1 hover:bg-surface rounded">
+          <X size={20} className="text-ink-faint" />
         </button>
       </div>
 
       {/* Group info */}
-      <div className="p-4 text-center border-b border-gray-700">
+      <div className="p-4 text-center border-b">
         <div className="w-16 h-16 rounded-full bg-violet-600 flex items-center justify-center mx-auto mb-2">
           <Users size={28} className="text-white" />
         </div>
         <h3 className="text-white font-semibold">{chat.name || t('chatList.group')}</h3>
-        <p className="text-sm text-gray-400">{t('chat.members', { count: groupMembers.length })}</p>
+        <p className="text-sm text-ink-faint">{t('chat.members', { count: groupMembers.length })}</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-700">
+      <div className="flex border-b">
         {tabs.map((tabItem) => (
           <button
             key={tabItem.id}
@@ -139,7 +139,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
               tab === tabItem.id
                 ? 'text-violet-400 border-b-2 border-violet-400'
-                : 'text-gray-400 hover:text-gray-300'
+                : 'text-ink-faint hover:text-gray-300'
             }`}
           >
             {tabItem.label}
@@ -155,7 +155,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             {isAdmin && (
               <button
                 onClick={() => setShowAddMember(true)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-800 transition-colors mb-2"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-em-sm hover:bg-elev transition-colors mb-2"
               >
                 <div className="w-9 h-9 rounded-full bg-violet-600 flex items-center justify-center">
                   <UserPlus size={16} className="text-white" />
@@ -165,18 +165,18 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             )}
 
             {showAddMember && (
-              <div className="mb-2 p-3 bg-gray-800 rounded-lg">
+              <div className="mb-2 p-3 bg-elev rounded-em-sm">
                 <input
                   value={newMemberId}
                   onChange={(e) => setNewMemberId(e.target.value)}
                   placeholder={t('group.userId')}
-                  className="w-full px-3 py-1.5 bg-gray-700 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  className="w-full px-3 py-1.5 bg-surface-2 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
                 <input
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
                   placeholder={t('group.nameOptional')}
-                  className="w-full px-3 py-1.5 bg-gray-700 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  className="w-full px-3 py-1.5 bg-surface-2 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
                 />
                 <div className="flex gap-2">
                   <button
@@ -187,7 +187,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                   </button>
                   <button
                     onClick={() => setShowAddMember(false)}
-                    className="px-3 py-1.5 text-gray-400 text-sm hover:text-white"
+                    className="px-3 py-1.5 text-ink-faint text-sm hover:text-white"
                   >
                     {t('group.cancel')}
                   </button>
@@ -196,8 +196,8 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             )}
 
             {groupMembers.map((member) => (
-              <div key={member.userId} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
-                <div className="w-9 h-9 rounded-full bg-gray-600 flex items-center justify-center text-sm font-medium text-white">
+              <div key={member.userId} className="flex items-center gap-3 px-3 py-2 rounded-em-sm hover:bg-elev transition-colors">
+                <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-sm font-medium text-white">
                   {(member.displayName || '?')[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -205,7 +205,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     <span className="text-sm text-white truncate">{member.displayName}</span>
                     {roleIcon(member.role)}
                   </div>
-                  <span className="text-xs text-gray-400">{member.role}</span>
+                  <span className="text-xs text-ink-faint">{member.role}</span>
                 </div>
 
                 {/* Role change buttons */}
@@ -214,7 +214,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     {member.role === 'member' && (
                       <button
                         onClick={() => handleChangeRole(member.userId, 'admin')}
-                        className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-blue-400"
+                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-blue-400"
                         title={t('group.makeAdmin')}
                       >
                         <Shield size={14} />
@@ -223,7 +223,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     {member.role === 'admin' && isOwner && (
                       <button
                         onClick={() => handleChangeRole(member.userId, 'member')}
-                        className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-yellow-400"
+                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-yellow-400"
                         title={t('group.demote')}
                       >
                         <ChevronRight size={14} />
@@ -231,7 +231,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     )}
                     <button
                       onClick={() => handleRemoveMember(member.userId)}
-                      className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400"
+                      className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-danger"
                       title={t('group.remove')}
                     >
                       <UserMinus size={14} />
@@ -242,7 +242,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             ))}
 
             {groupMembers.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">{t('group.noMembers')}</p>
+              <p className="text-sm text-ink-faint text-center py-4">{t('group.noMembers')}</p>
             )}
           </div>
         )}
@@ -269,14 +269,14 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                 />
               </>
             ) : (
-              <p className="text-sm text-gray-400">{t('group.adminOnly')}</p>
+              <p className="text-sm text-ink-faint">{t('group.adminOnly')}</p>
             )}
 
             {/* Leave group */}
             {!isOwner && (
               <button
                 onClick={handleLeave}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors mt-6"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-em-sm bg-danger/10 hover:bg-danger/20 text-danger transition-colors mt-6"
               >
                 <LogOut size={18} />
                 <span className="text-sm font-medium">{t('group.leaveGroup')}</span>
@@ -293,27 +293,27 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                 {!inviteResult ? (
                   <button
                     onClick={handleCreateInvite}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-em-sm transition-colors"
                   >
                     <Link size={18} />
                     <span className="text-sm font-medium">{t('group.createInvite')}</span>
                   </button>
                 ) : (
                   <div className="space-y-3">
-                    <div className="p-3 bg-gray-800 rounded-lg">
-                      <p className="text-xs text-gray-400 mb-1">{t('group.inviteLink')}</p>
+                    <div className="p-3 bg-elev rounded-em-sm">
+                      <p className="text-xs text-ink-faint mb-1">{t('group.inviteLink')}</p>
                       <p className="text-sm text-white font-mono break-all">
                         pulse://invite/{inviteResult.code}
                       </p>
                     </div>
                     <button
                       onClick={handleCopyInvite}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface-2 hover:bg-surface-2 text-white rounded-em-sm transition-colors"
                     >
                       <Copy size={16} />
                       <span className="text-sm">{t('group.copy')}</span>
                     </button>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-ink-faint">
                       {inviteResult.maxUses
                         ? t('group.maxUses', { count: inviteResult.maxUses })
                         : t('group.noLimit')}
@@ -323,7 +323,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                 )}
               </>
             ) : (
-              <p className="text-sm text-gray-400">{t('group.adminOnlyInvite')}</p>
+              <p className="text-sm text-ink-faint">{t('group.adminOnlyInvite')}</p>
             )}
           </div>
         )}
@@ -340,10 +340,10 @@ function ToggleSetting({ label, enabled, onToggle }: {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-750 transition-colors"
+      className="w-full flex items-center justify-between px-3 py-2.5 rounded-em-sm bg-elev hover:bg-gray-750 transition-colors"
     >
       <span className="text-sm text-gray-200">{label}</span>
-      <div className={`w-10 h-5 rounded-full transition-colors ${enabled ? 'bg-violet-500' : 'bg-gray-600'}`}>
+      <div className={`w-10 h-5 rounded-full transition-colors ${enabled ? 'bg-violet-500' : 'bg-surface-2'}`}>
         <div className={`w-4 h-4 rounded-full bg-white shadow mt-0.5 transition-transform ${enabled ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'}`} />
       </div>
     </button>

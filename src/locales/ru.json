@@ -41,7 +41,8 @@
     "selectFile": "Выберите файл",
     "queuedOffline": "Сообщение будет отправлено, когда собеседник появится в сети",
     "queueFlushed": "Отправлено отложенных сообщений: {{count}}",
-    "offline": "не в сети"
+    "offline": "не в сети",
+    "queuedCount": "в очереди: {{count}}"
   },
   "chatList": {
     "newChat": "Новый чат",
@@ -110,11 +111,12 @@
     "encryption": "E2E шифрование",
     "encryptionEnabled": "Все сообщения защищены",
     "version": "Версия",
-    "appVersion": "Pulse v1.0.0",
+    "appVersion": "ember v2.0.0",
     "about": "О приложении",
     "account": "Аккаунт",
     "logout": "Выйти",
-    "deleteAccount": "Удалить аккаунт"
+    "deleteAccount": "Удалить аккаунт",
+    "fingerprint": "Отпечаток ключа"
   },
   "contacts": {
     "title": "Контакты",
@@ -139,7 +141,7 @@
     "added": "{{name}} добавлен(а) в контакты"
   },
   "profile": {
-    "welcome": "Добро пожаловать в Pulse",
+    "welcome": "Добро пожаловать в ember",
     "setupDesc": "Создайте свой профиль для начала работы",
     "username": "Имя пользователя",
     "usernamePlaceholder": "username",
@@ -218,7 +220,7 @@
     "red": "rose"
   },
   "updater": {
-    "available": "Доступна версия Pulse {{version}}. Скачать и установить?",
+    "available": "Доступна версия ember {{version}}. Скачать и установить?",
     "downloading": "Загружаю обновление…",
     "restartPrompt": "Обновление установлено. Перезапустить сейчас?",
     "failed": "Не удалось обновиться: {{error}}"

@@ -86,22 +86,22 @@ export function AddContactDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm"
+        className="bg-elev rounded-em-lg p-6 w-full max-w-sm"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('contacts.addTitle')}</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-            <X size={20} className="text-gray-400" />
+          <h2 className="text-lg font-semibold text-ink">{t('contacts.addTitle')}</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-surface">
+            <X size={20} className="text-ink-faint" />
           </button>
         </div>
 
         {scanning ? (
           <div className="space-y-3">
-            <video ref={videoRef} className="w-full rounded-xl bg-black aspect-square object-cover" muted playsInline />
+            <video ref={videoRef} className="w-full rounded-em-md bg-black aspect-square object-cover" muted playsInline />
             <button
               onClick={stopScan}
-              className="w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              className="w-full px-4 py-2 text-sm text-ink-dim hover:text-ink"
             >
               {t('group.cancel')}
             </button>
@@ -113,25 +113,25 @@ export function AddContactDialog({ onClose }: { onClose: () => void }) {
               onChange={(e) => setCode(e.target.value)}
               placeholder={t('contacts.pasteCode')}
               rows={3}
-              className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pulse-500 resize-none font-mono"
+              className="w-full px-3 py-2 bg-surface border rounded-em-md text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent resize-none font-mono"
             />
             <input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               placeholder={t('contacts.nickname')}
-              className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pulse-500"
+              className="w-full px-3 py-2 bg-surface border rounded-em-md text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
             />
             <button
               onClick={() => handleAdd(code)}
               disabled={!code.trim() || busy}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-pulse-500 text-white rounded-xl hover:bg-pulse-600 transition-colors text-sm font-medium disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-accent-ink rounded-em-md hover:brightness-110 transition-colors text-sm font-medium disabled:opacity-50"
             >
               <UserPlus size={16} />
               {t('contacts.add')}
             </button>
             <button
               onClick={startScan}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface text-ink-dim rounded-em-md hover:bg-surface-2 transition-colors text-sm font-medium"
             >
               <Camera size={16} />
               {t('contacts.scanQr')}

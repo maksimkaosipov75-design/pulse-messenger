@@ -8,7 +8,7 @@ import { useGroupStore } from '@/stores/groupStore';
 import { invoke } from '@tauri-apps/api/core';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Paperclip, Phone, Video, ArrowLeft, Trash2, Mic, Square, Users } from 'lucide-react';
+import { Send, Paperclip, Phone, Video, ArrowLeft, Trash2, Mic, Square, Users, Lock, Check, CheckCheck, Clock } from 'lucide-react';
 import { Message, MessageType } from '@/types';
 import { format } from 'date-fns';
 import { enUS, ru } from 'date-fns/locale';
@@ -205,20 +205,20 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
 
   return (
     <>
-      <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className="h-full flex flex-col bg-bg">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex-shrink-0">
+      <div className="bg-elev border-b px-4 py-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           {onBack && (
-            <button onClick={onBack} className="p-2 -ml-2 mr-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 md:hidden">
-              <ArrowLeft size={20} className="text-gray-500" />
+            <button onClick={onBack} className="p-2 -ml-2 mr-1 rounded-em-sm hover:bg-surface md:hidden">
+              <ArrowLeft size={20} className="text-ink-dim" />
             </button>
           )}
           <div
             className={`flex items-center ${currentChat.chatType === 'group' ? 'cursor-pointer hover:opacity-80' : ''}`}
             onClick={() => currentChat.chatType === 'group' && setShowGroupSettings(true)}
           >
-            <div className="w-10 h-10 rounded-full bg-pulse-100 dark:bg-pulse-900 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center">
               {currentChat.avatarUrl ? (
                 <img
                   src={currentChat.avatarUrl}
@@ -226,18 +226,19 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
                   className="w-10 h-10 rounded-full object-cover"
                 />
               ) : currentChat.chatType === 'group' ? (
-                <Users size={20} className="text-pulse-600 dark:text-pulse-400" />
+                <Users size={20} className="text-ink-dim" />
               ) : (
-                <span className="text-lg font-semibold text-pulse-600 dark:text-pulse-400">
+                <span className="text-lg font-bold text-ink">
                   {chatName[0]?.toUpperCase() || '?'}
                 </span>
               )}
             </div>
             <div className="ml-3">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-[15px] font-bold flex items-center gap-1.5">
                 {chatName}
+                <Lock size={13} className="text-ink-faint" />
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className={`text-xs ${peerOnline && currentChat.chatType !== 'group' ? 'text-accent' : 'text-ink-faint'}`}>
                 {currentChat.chatType === 'group'
                   ? t('chat.members', { count: currentChat.participantIds.length })
                   : peerOnline
@@ -248,11 +249,11 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
           </div>
 
           <div className="flex items-center space-x-2">
-            <button onClick={handleAudioCall} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title={t('chat.audioCall')}>
-              <Phone size={20} className="text-gray-500" />
+            <button onClick={handleAudioCall} className="p-2 rounded-em-sm hover:bg-surface transition-colors" title={t('chat.audioCall')}>
+              <Phone size={20} className="text-ink-dim" />
             </button>
-            <button onClick={handleVideoCall} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title={t('chat.videoCall')}>
-              <Video size={20} className="text-gray-500" />
+            <button onClick={handleVideoCall} className="p-2 rounded-em-sm hover:bg-surface transition-colors" title={t('chat.videoCall')}>
+              <Video size={20} className="text-ink-dim" />
             </button>
           </div>
         </div>
@@ -266,7 +267,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
       >
         {isLoadingMessages && (
           <div className="flex justify-center py-2">
-            <div className="animate-spin w-6 h-6 border-2 border-pulse-500 border-t-transparent rounded-full" />
+            <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
           </div>
         )}
         {messages.map((message) => (
@@ -285,19 +286,19 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+          className="fixed bg-elev rounded-em-md shadow-xl border py-1 z-50"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button
             onClick={handleReply}
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-4 py-2 text-left text-sm hover:bg-surface text-ink-dim"
           >
             {t('chat.reply')}
           </button>
           {contextMenu.message.senderId === user?.id && (
             <button
               onClick={handleDeleteMessage}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500 flex items-center space-x-2"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-danger-soft text-danger flex items-center space-x-2"
             >
               <Trash2 size={14} />
               <span>{t('chat.delete')}</span>
@@ -308,88 +309,85 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
 
       {/* Reply preview */}
       {replyTo && (
-        <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-pulse-500 font-medium">
+        <div className="bg-elev border-t px-4 py-2 flex items-center justify-between">
+          <div className="flex-1 min-w-0 border-l-[2.5px] border-accent pl-3">
+            <p className="text-xs text-accent font-semibold">
               {t('chat.replyTo')} {replyTo.senderId === user?.id ? t('chat.replySelf') : t('chat.replyOther')}
             </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+            <p className="text-sm text-ink-dim truncate">
               {replyTo.content}
             </p>
           </div>
           <button
             onClick={() => setReplyTo(null)}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-1 rounded hover:bg-surface"
           >
-            <ArrowLeft size={16} className="text-gray-400" />
+            <ArrowLeft size={16} className="text-ink-faint" />
           </button>
         </div>
       )}
 
       {/* Input */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 flex-shrink-0">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleFilePick}
-            disabled={!peerId}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"
-            title={t('chat.attachFile')}
-          >
-            <Paperclip size={20} className="text-gray-500" />
-          </button>
-
-          <div className="flex-1 relative">
+      <div className="bg-elev border-t p-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-1 bg-surface rounded-em-xl px-2 py-1.5">
+            <button
+              onClick={handleFilePick}
+              disabled={!peerId}
+              className="p-2 rounded-full hover:bg-surface-2 disabled:opacity-30 transition-colors"
+              title={t('chat.attachFile')}
+            >
+              <Paperclip size={19} className="text-ink-dim" />
+            </button>
             {isRecording ? (
-              <div className="w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-sm text-red-600 dark:text-red-400 font-mono">
+              <div className="flex-1 px-2 py-1.5 flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-danger animate-pulse" />
+                <span className="text-sm text-danger font-mono">
                   {formatRecordingTime(recordingTime)}
                 </span>
-                <span className="text-xs text-red-400">{t('chat.recording')}</span>
+                <span className="text-xs text-ink-faint">{t('chat.recording')}</span>
               </div>
             ) : (
-              <>
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={t('chat.messagePlaceholder')}
-                  autoFocus
-                  className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-pulse-500 dark:text-white"
-                />
-              </>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={t('chat.messagePlaceholder')}
+                autoFocus
+                className="flex-1 px-2 py-1.5 bg-transparent text-[15px] focus:outline-none placeholder:text-ink-faint"
+              />
             )}
           </div>
 
           {isRecording ? (
             <button
               onClick={stopRecording}
-              className="p-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              className="w-[46px] h-[46px] rounded-full bg-danger text-white hover:brightness-110 transition flex items-center justify-center flex-shrink-0"
             >
-              <Square size={20} />
+              <Square size={19} />
             </button>
           ) : inputValue.trim() ? (
             <button
               onClick={handleSend}
-              className="p-2 rounded-lg bg-pulse-500 text-white hover:bg-pulse-600 transition-colors"
+              className="w-[46px] h-[46px] rounded-full bg-accent text-accent-ink hover:brightness-110 transition flex items-center justify-center flex-shrink-0"
             >
-              <Send size={20} />
+              <Send size={19} />
             </button>
           ) : (
             <button
               onClick={startRecording}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="w-[46px] h-[46px] rounded-full bg-surface hover:bg-surface-2 transition-colors flex items-center justify-center flex-shrink-0"
               title={t('chat.voiceMessage')}
             >
-              <Mic size={20} className="text-gray-500" />
+              <Mic size={19} className="text-ink-dim" />
             </button>
           )}
         </div>
       </div>
     </div>
     {showGroupSettings && currentChat.chatType === 'group' && (
-      <div className="w-80 flex-shrink-0">
+      <div className="w-[332px] flex-shrink-0">
         <GroupSettingsPanel
           chat={currentChat}
           onClose={() => setShowGroupSettings(false)}
@@ -418,32 +416,36 @@ function MessageBubble({
   const { t, i18n } = useTranslation();
   const isMedia = MEDIA_TYPES.includes(message.messageType);
 
+  // Детерминированный hue имени отправителя в группах
+  const senderHue = message.senderId
+    ? Array.from(message.senderId).reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)
+    : 0;
+
   return (
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div
         onContextMenu={onContextMenu}
-        className={`max-w-[70%] rounded-2xl cursor-default ${
+        className={`max-w-[78%] md:max-w-[70%] rounded-[18px] cursor-default ${
           isOwn
-            ? 'bg-pulse-500 text-white rounded-br-md'
-            : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md shadow-sm'
+            ? 'bg-bubble-out text-bubble-out-ink rounded-br-[6px]'
+            : 'bg-bubble-in text-ink rounded-bl-[6px]'
         } ${isMedia ? 'p-1' : 'px-4 py-2'}`}
       >
         {showSender && !isOwn && message.senderId && (
-          <p className="text-xs font-semibold text-violet-500 dark:text-violet-400 mb-0.5 px-1">
+          <p
+            className="text-xs font-bold mb-0.5 px-1"
+            style={{ color: `oklch(0.72 0.13 ${senderHue})` }}
+          >
             {senderNameMap?.[message.senderId] || t('chat.unknownUser')}
           </p>
         )}
         {isMedia ? (
           <FileMessage message={message} isOwn={isOwn} />
         ) : (
-          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+          <p className="text-[15px] leading-[1.45] whitespace-pre-wrap break-words">{message.content}</p>
         )}
-        <div
-          className={`flex items-center justify-end mt-1 space-x-1 px-2 pb-1 ${
-            isOwn ? 'text-pulse-100' : 'text-gray-400'
-          }`}
-        >
-          <span className="text-xs">
+        <div className="flex items-center justify-end mt-0.5 gap-1 px-2 pb-1 opacity-60">
+          <span className="text-[10.5px] font-mono">
             {format(new Date(message.timestamp), 'HH:mm', { locale: i18n.language === 'en' ? enUS : ru })}
           </span>
           {isOwn && <DeliveryStatus message={message} />}
@@ -457,8 +459,8 @@ function MessageBubble({
 function DeliveryStatus({ message }: { message: Message }) {
   const queued = useChatStore((s) => s.outbox.some((o) => o.messageId === message.id));
   const meta = message.metadata as { delivered?: boolean; read?: boolean } | null;
-  if (queued) return <span className="text-xs">🕓</span>;
-  if (meta?.read) return <span className="text-xs font-bold">✓✓</span>;
-  if (meta?.delivered) return <span className="text-xs opacity-60">✓✓</span>;
-  return <span className="text-xs opacity-60">✓</span>;
+  if (queued) return <Clock size={12} className="text-warn" />;
+  if (meta?.read) return <CheckCheck size={13} className="text-accent opacity-100" />;
+  if (meta?.delivered) return <CheckCheck size={13} />;
+  return <Check size={13} />;
 }

@@ -40,7 +40,7 @@ export function ActiveCallView() {
   const isVideo = callInfo.callType === 'video';
 
   return (
-    <div className="fixed inset-0 bg-gray-900 flex flex-col z-50">
+    <div className="fixed inset-0 bg-rail flex flex-col z-50">
       {/* Remote video (full screen background) */}
       {isVideo && (
         <video
@@ -66,14 +66,14 @@ export function ActiveCallView() {
           </div>
         )}
         <h2 className="text-xl font-semibold text-white mb-1">{callInfo.peerName}</h2>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-ink-faint">
           {callState === 'connecting' ? t('call.connecting') : formatDuration(callDuration)}
         </p>
       </div>
 
       {/* Local video overlay (PiP) */}
       {isVideo && (
-        <div className="absolute top-4 right-4 w-32 h-24 rounded-lg overflow-hidden border-2 border-white/20 shadow-lg z-20">
+        <div className="absolute top-4 right-4 w-32 h-24 rounded-em-sm overflow-hidden border-2 border-white/20 shadow-lg z-20">
           <video
             ref={localVideoRef}
             autoPlay
@@ -94,7 +94,7 @@ export function ActiveCallView() {
           <button
             onClick={toggleMute}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-              isMuted ? 'bg-red-500' : 'bg-white/20 hover:bg-white/30'
+              isMuted ? 'bg-danger' : 'bg-white/20 hover:bg-white/30'
             }`}
           >
             {isMuted ? <MicOff size={24} className="text-white" /> : <Mic size={24} className="text-white" />}
@@ -104,7 +104,7 @@ export function ActiveCallView() {
             <button
               onClick={toggleVideo}
               className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                isVideoOff ? 'bg-red-500' : 'bg-white/20 hover:bg-white/30'
+                isVideoOff ? 'bg-danger' : 'bg-white/20 hover:bg-white/30'
               }`}
             >
               {isVideoOff ? <VideoOff size={24} className="text-white" /> : <Video size={24} className="text-white" />}
@@ -114,7 +114,7 @@ export function ActiveCallView() {
           <button
             onClick={toggleSpeaker}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-              isSpeakerOn ? 'bg-pulse-500' : 'bg-white/20 hover:bg-white/30'
+              isSpeakerOn ? 'bg-accent' : 'bg-white/20 hover:bg-white/30'
             }`}
           >
             {isSpeakerOn ? <Volume2 size={24} className="text-white" /> : <VolumeX size={24} className="text-white" />}
@@ -122,7 +122,7 @@ export function ActiveCallView() {
 
           <button
             onClick={() => endCall()}
-            className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors shadow-lg shadow-red-500/30"
+            className="w-14 h-14 rounded-full bg-danger hover:brightness-110 flex items-center justify-center transition-colors shadow-lg shadow-red-500/30"
           >
             <PhoneOff size={24} className="text-white" />
           </button>

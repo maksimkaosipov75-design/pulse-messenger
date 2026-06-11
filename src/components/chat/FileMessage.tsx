@@ -17,7 +17,7 @@ interface FileMessageProps {
   isOwn: boolean;
 }
 
-export function FileMessage({ message, isOwn }: FileMessageProps) {
+export function FileMessage({ message, isOwn: _isOwn }: FileMessageProps) {
   const { t } = useTranslation();
   const { getFileUrl, saveToDownloads } = useFileStore();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
@@ -132,17 +132,15 @@ export function FileMessage({ message, isOwn }: FileMessageProps) {
   // Generic file
   return (
     <div
-      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer ${
-        isOwn ? 'bg-blue-600/20' : 'bg-white/5'
-      } hover:brightness-110 transition`}
+      className="flex items-center gap-3 p-3 rounded-em-md cursor-pointer hover:brightness-110 transition"
       onClick={handleDownload}
     >
-      <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+      <div className="w-11 h-11 rounded-em-sm bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
         <FileIcon size={20} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{fileName}</p>
-        <p className="text-xs opacity-60">{formatFileSize(fileSize)}</p>
+        <p className="text-sm font-bold truncate">{fileName}</p>
+        <p className="text-[11px] font-mono opacity-60">{formatFileSize(fileSize)}</p>
       </div>
       <Download size={16} className="opacity-40 flex-shrink-0" />
     </div>
@@ -291,8 +289,19 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Детерминированная waveform: 34 бара из имени файла
+  const bars = Array.from({ length: 34 }, (_, i) => {
+    let h = 2166136261;
+    const seedStr = _fileName + i;
+    for (let j = 0; j < seedStr.length; j++) {
+      h ^= seedStr.charCodeAt(j);
+      h = Math.imul(h, 16777619);
+    }
+    return 0.25 + ((h >>> 8) % 1000) / 1333;
+  });
+
   return (
-    <div className="flex items-center gap-3 p-2 min-w-[200px]">
+    <div className="flex items-center gap-3 p-2 min-w-[220px]">
       {mode === 'element' && (
         <audio
           ref={audioElRef}
@@ -314,23 +323,31 @@ function VoiceMessage({ fileUrl, fileName: _fileName, fileSize, onDownload: _onD
       <button
         onClick={togglePlay}
         disabled={mode === 'loading' || mode === 'error'}
-        className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 hover:bg-blue-600 transition disabled:opacity-50"
+        className="w-10 h-10 rounded-full bg-accent text-accent-ink flex items-center justify-center flex-shrink-0 hover:brightness-110 transition disabled:opacity-50"
       >
         {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
       </button>
       <div className="flex-1">
-        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-100"
-            style={{ width: `${progress * 100}%` }}
-          />
+        <div className="flex items-end gap-[2px] h-7">
+          {bars.map((b, i) => (
+            <span
+              key={i}
+              className="flex-1 rounded-full transition-colors"
+              style={{
+                height: `${b * 100}%`,
+                background:
+                  i / bars.length <= progress ? 'var(--accent)' : 'var(--text-faint)',
+                opacity: i / bars.length <= progress ? 1 : 0.45,
+              }}
+            />
+          ))}
         </div>
         <div className="flex justify-between mt-1">
-          <span className="text-[10px] opacity-50">
+          <span className="text-[10.5px] font-mono opacity-60">
             {duration > 0 ? formatTime(duration) : formatFileSize(fileSize)}
           </span>
           {duration > 0 && (
-            <span className="text-[10px] opacity-50">{formatTime(progress * duration)}</span>
+            <span className="text-[10.5px] font-mono opacity-60">{formatTime(progress * duration)}</span>
           )}
         </div>
       </div>

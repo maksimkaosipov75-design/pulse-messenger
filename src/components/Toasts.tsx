@@ -2,9 +2,9 @@ import { useToastStore, Toast } from '@/stores/toastStore';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 
 const styles: Record<Toast['type'], string> = {
-  error: 'bg-red-500 text-white',
-  success: 'bg-green-500 text-white',
-  info: 'bg-gray-800 text-white dark:bg-gray-700',
+  error: 'bg-danger text-white',
+  success: 'bg-online text-white',
+  info: 'bg-surface-2 text-ink',
 };
 
 const icons: Record<Toast['type'], typeof AlertCircle> = {
@@ -25,7 +25,7 @@ export function Toasts() {
         return (
           <div
             key={toast.id}
-            className={`flex items-start gap-2 px-4 py-3 rounded-xl shadow-lg ${styles[toast.type]}`}
+            className={`flex items-start gap-2 px-4 py-3 rounded-em-md shadow-lg ${styles[toast.type]}`}
             role="alert"
           >
             <Icon size={18} className="flex-shrink-0 mt-0.5" />

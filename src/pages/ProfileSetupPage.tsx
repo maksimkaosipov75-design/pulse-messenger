@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUserStore } from '@/stores/userStore';
-import { MessageCircle, LogIn } from 'lucide-react';
+import { Flame, LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export function ProfileSetupPage() {
@@ -15,37 +15,37 @@ export function ProfileSetupPage() {
   // Logged-out state with an existing profile: offer to log back in
   if (isLoggedOut && user) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-screen bg-bg">
         <div className="w-full max-w-md p-8 text-center">
-          <div className="w-20 h-20 mx-auto mb-4 bg-pulse-500 rounded-full flex items-center justify-center text-white text-3xl font-bold">
+          <div className="w-20 h-20 mx-auto mb-4 bg-accent rounded-full flex items-center justify-center text-white text-3xl font-bold">
             {(user.displayName || user.username)[0]?.toUpperCase()}
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-ink">
             {user.displayName || user.username}
           </h1>
-          <p className="mt-1 text-gray-500 dark:text-gray-400">@{user.username}</p>
+          <p className="mt-1 text-ink-dim">@{user.username}</p>
 
           <button
             onClick={login}
-            className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 bg-pulse-500 text-white rounded-lg font-medium hover:bg-pulse-600 transition-colors"
+            className="mt-6 w-full flex items-center justify-center gap-2 py-2.5 bg-accent text-accent-ink rounded-em-sm font-medium hover:brightness-110 transition-colors"
           >
             <LogIn size={18} />
             {t('profile.loginAs', { name: user.displayName || user.username })}
           </button>
 
           {confirmReset ? (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{t('profile.resetWarning')}</p>
+            <div className="mt-4 p-3 bg-danger-soft rounded-em-sm">
+              <p className="text-sm text-danger mb-3">{t('profile.resetWarning')}</p>
               <div className="flex gap-2 justify-center">
                 <button
                   onClick={() => setConfirmReset(false)}
-                  className="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  className="px-4 py-1.5 text-sm text-ink-dim hover:text-ink"
                 >
                   {t('group.cancel')}
                 </button>
                 <button
                   onClick={deleteAccount}
-                  className="px-4 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  className="px-4 py-1.5 text-sm bg-danger text-white rounded-em-sm hover:brightness-110"
                 >
                   {t('profile.resetConfirm')}
                 </button>
@@ -54,7 +54,7 @@ export function ProfileSetupPage() {
           ) : (
             <button
               onClick={() => setConfirmReset(true)}
-              className="mt-4 text-sm text-red-500 hover:text-red-600"
+              className="mt-4 text-sm text-danger hover:text-red-600"
             >
               {t('profile.resetAccount')}
             </button>
@@ -92,54 +92,54 @@ export function ProfileSetupPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex items-center justify-center h-screen bg-bg">
       <div className="w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto mb-4 bg-pulse-500 rounded-full flex items-center justify-center">
-            <MessageCircle size={40} className="text-white" />
+          <div className="w-20 h-20 mx-auto mb-4 bg-accent-soft rounded-em-xl flex items-center justify-center">
+            <Flame size={40} className="text-accent" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl font-bold text-ink">
             {t('profile.welcome')}
           </h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-ink-dim">
             {t('profile.setupDesc')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-ink-dim mb-1">
               {t('profile.username')}
             </label>
             <input
               value={username}
               onChange={(e) => { setUsername(e.target.value); setError(''); }}
               placeholder={t('profile.usernamePlaceholder')}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-pulse-500 focus:outline-none"
+              className="w-full px-3 py-2 bg-elev border rounded-em-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-ink-dim mb-1">
               {t('profile.displayName')}
             </label>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder={t('profile.displayNamePlaceholder')}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-pulse-500 focus:outline-none"
+              className="w-full px-3 py-2 bg-elev border rounded-em-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-danger">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={isCreating}
-            className="w-full py-2.5 bg-pulse-500 text-white rounded-lg font-medium hover:bg-pulse-600 disabled:opacity-50 transition-colors"
+            className="w-full py-2.5 bg-accent text-accent-ink rounded-em-sm font-medium hover:brightness-110 disabled:opacity-50 transition-colors"
           >
             {isCreating ? t('profile.creating') : t('profile.create')}
           </button>

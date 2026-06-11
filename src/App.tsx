@@ -112,7 +112,7 @@ function AppLayout() {
           path="/"
           element={
             <div className="flex flex-1 min-w-0">
-              <div className="w-80 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="w-80 border-r flex-shrink-0">
                 {isSearchOpen ? <SearchPanel /> : <ChatList />}
               </div>
               <div className="flex-1 min-w-0">
@@ -180,8 +180,8 @@ function App() {
 
   if (userLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin w-10 h-10 border-2 border-pulse-500 border-t-transparent rounded-full" />
+      <div className="flex items-center justify-center h-screen bg-bg">
+        <div className="animate-spin w-10 h-10 border-2 border-accent border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -200,11 +200,11 @@ function App() {
 function EmptyState() {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+    <div className="flex items-center justify-center h-full bg-bg">
       <div className="text-center">
-        <div className="w-20 h-20 mx-auto mb-4 bg-pulse-100 dark:bg-pulse-900 rounded-full flex items-center justify-center">
+        <div className="w-20 h-20 mx-auto mb-4 bg-accent-soft rounded-full flex items-center justify-center">
           <svg
-            className="w-10 h-10 text-pulse-500"
+            className="w-10 h-10 text-accent"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -217,10 +217,10 @@ function EmptyState() {
             />
           </svg>
         </div>
-        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+        <h2 className="text-xl font-semibold text-ink-dim">
           {t('chat.selectChat')}
         </h2>
-        <p className="mt-2 text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-ink-dim">
           {t('chat.selectChatDesc')}
         </p>
       </div>

@@ -21,6 +21,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { MyCodeDialog } from '@/components/contacts/MyCodeDialog';
+import { Identicon } from '@/components/Identicon';
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -42,49 +43,49 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+    <div className="h-full overflow-y-auto bg-bg">
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
+        <h1 className="text-2xl font-bold text-ink">{t('settings.title')}</h1>
 
         {/* Profile */}
         <Section icon={<User size={20} />} title={t('settings.profile')}>
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
-              <div className="w-16 h-16 rounded-full bg-pulse-500 flex items-center justify-center text-white text-2xl font-bold">
+              <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center text-white text-2xl font-bold">
                 {(user?.displayName || user?.username || '?')[0]?.toUpperCase()}
               </div>
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-ink">
                   {user?.displayName || user?.username}
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-ink-dim">
                   @{user?.username}
                 </p>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.displayName')}</label>
+              <label className="block text-sm text-ink-dim mb-1">{t('settings.displayName')}</label>
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-pulse-500 focus:outline-none"
+                className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">{t('settings.bio')}</label>
+              <label className="block text-sm text-ink-dim mb-1">{t('settings.bio')}</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-pulse-500 focus:outline-none resize-none"
+                className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none resize-none"
               />
             </div>
 
             <button
               onClick={handleSaveProfile}
-              className="px-4 py-2 bg-pulse-500 text-white text-sm rounded-lg hover:bg-pulse-600 transition-colors"
+              className="px-4 py-2 bg-accent text-accent-ink text-sm rounded-em-sm hover:brightness-110 transition-colors"
             >
               {saved ? t('settings.profileSaved') : t('group.save')}
             </button>
@@ -95,17 +96,17 @@ export function SettingsPage() {
         <Section icon={<Palette size={20} />} title={t('settings.appearance')}>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{t('settings.darkMode')}</span>
+              <span className="text-sm text-ink-dim">{t('settings.darkMode')}</span>
               <button
                 onClick={toggleDark}
-                className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                className="p-2 rounded-em-sm bg-surface-2 hover:bg-gray-300 dark:hover:bg-surface-2 transition-colors"
               >
                 {settings.isDark ? <Moon size={18} /> : <Sun size={18} />}
               </button>
             </div>
 
             <div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">{t('settings.theme')}</p>
+              <p className="text-sm text-ink-dim mb-2">{t('settings.theme')}</p>
               <div className="flex gap-2">
                 {themes.map((theme) => (
                   <button
@@ -113,7 +114,7 @@ export function SettingsPage() {
                     onClick={() => setTheme(theme.id)}
                     className={`w-10 h-10 rounded-full border-2 transition-all ${
                       settings.theme === theme.id
-                        ? 'border-gray-900 dark:border-white scale-110'
+                        ? 'border-ink scale-110'
                         : 'border-transparent hover:scale-105'
                     }`}
                     style={{ backgroundColor: theme.color }}
@@ -150,7 +151,7 @@ export function SettingsPage() {
             onChange={(e) => {
               updateSettings({ language: e.target.value });
             }}
-            className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-pulse-500 focus:outline-none"
+            className="w-full px-3 py-2 bg-elev border rounded-em-sm text-sm text-ink focus:ring-2 focus:ring-accent focus:outline-none"
           >
             <option value="ru">Русский</option>
             <option value="en">English</option>
@@ -161,15 +162,18 @@ export function SettingsPage() {
         <Section icon={<Shield size={20} />} title={t('settings.security')}>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{t('settings.encryption')}</span>
-              <span className="text-xs text-green-500 font-medium">{t('settings.encryptionEnabled')}</span>
+              <span className="text-sm text-ink-dim">{t('settings.encryption')}</span>
+              <span className="text-xs text-online font-medium">{t('settings.encryptionEnabled')}</span>
             </div>
             {user?.publicKey && (
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Public Key</p>
-                <code className="text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded block break-all">
-                  {user.publicKey}
-                </code>
+              <div className="flex items-start gap-3">
+                <Identicon value={user.publicKey} size={48} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-ink-dim mb-1">{t('settings.fingerprint')}</p>
+                  <code className="text-xs font-mono text-ink-dim bg-surface px-2 py-1 rounded-em-sm block break-all">
+                    {user.publicKey.slice(0, 16)}
+                  </code>
+                </div>
               </div>
             )}
           </div>
@@ -185,31 +189,31 @@ export function SettingsPage() {
           <div className="space-y-2">
             <button
               onClick={() => setShowMyCode(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-dim rounded-em-sm hover:bg-surface transition-colors"
             >
               <QrCode size={16} />
               {t('contacts.myCode')}
             </button>
             <button
               onClick={logout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-dim rounded-em-sm hover:bg-surface transition-colors"
             >
               <LogOut size={16} />
               {t('settings.logout')}
             </button>
             {confirmDelete ? (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400 mb-2">{t('profile.resetWarning')}</p>
+              <div className="p-3 bg-danger-soft rounded-em-sm">
+                <p className="text-sm text-danger mb-2">{t('profile.resetWarning')}</p>
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    className="px-3 py-1.5 text-sm text-ink-dim hover:text-ink"
                   >
                     {t('group.cancel')}
                   </button>
                   <button
                     onClick={deleteAccount}
-                    className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    className="px-3 py-1.5 text-sm bg-danger text-white rounded-em-sm hover:brightness-110"
                   >
                     {t('profile.resetConfirm')}
                   </button>
@@ -218,7 +222,7 @@ export function SettingsPage() {
             ) : (
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger rounded-em-sm hover:bg-danger-soft transition-colors"
               >
                 <Trash2 size={16} />
                 {t('settings.deleteAccount')}
@@ -233,8 +237,8 @@ export function SettingsPage() {
         <Section icon={<Info size={20} />} title={t('settings.about')}>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{t('settings.version')}</span>
-              <span className="text-sm text-gray-500">{t('settings.appVersion')}</span>
+              <span className="text-sm text-ink-dim">{t('settings.version')}</span>
+              <span className="text-sm text-ink-dim">{t('settings.appVersion')}</span>
             </div>
           </div>
         </Section>
@@ -245,10 +249,10 @@ export function SettingsPage() {
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+    <div className="bg-elev rounded-em-md p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-pulse-500">{icon}</span>
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
+        <span className="text-accent">{icon}</span>
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
       </div>
       {children}
     </div>
@@ -269,13 +273,13 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="text-gray-500">{icon}</span>
-        <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+        <span className="text-ink-dim">{icon}</span>
+        <span className="text-sm text-ink-dim">{label}</span>
       </div>
       <button
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors ${
-          checked ? 'bg-pulse-500' : 'bg-gray-300 dark:bg-gray-600'
+          checked ? 'bg-accent' : 'bg-gray-300 dark:bg-surface-2'
         }`}
       >
         <span

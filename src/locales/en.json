@@ -41,7 +41,8 @@
     "selectFile": "Select file",
     "queuedOffline": "Message will be sent when the peer is online",
     "queueFlushed": "Sent {{count}} queued message(s)",
-    "offline": "offline"
+    "offline": "offline",
+    "queuedCount": "queued: {{count}}"
   },
   "chatList": {
     "newChat": "New chat",
@@ -110,11 +111,12 @@
     "encryption": "E2E Encryption",
     "encryptionEnabled": "All messages are protected",
     "version": "Version",
-    "appVersion": "Pulse v1.0.0",
+    "appVersion": "ember v2.0.0",
     "about": "About",
     "account": "Account",
     "logout": "Log out",
-    "deleteAccount": "Delete account"
+    "deleteAccount": "Delete account",
+    "fingerprint": "Key fingerprint"
   },
   "contacts": {
     "title": "Contacts",
@@ -139,7 +141,7 @@
     "added": "{{name}} added to contacts"
   },
   "profile": {
-    "welcome": "Welcome to Pulse",
+    "welcome": "Welcome to ember",
     "setupDesc": "Create your profile to get started",
     "username": "Username",
     "usernamePlaceholder": "username",
@@ -218,7 +220,7 @@
     "red": "rose"
   },
   "updater": {
-    "available": "Pulse {{version}} is available. Download and install?",
+    "available": "ember {{version}} is available. Download and install?",
     "downloading": "Downloading update…",
     "restartPrompt": "Update installed. Restart now?",
     "failed": "Update failed: {{error}}"
