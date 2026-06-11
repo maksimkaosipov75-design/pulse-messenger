@@ -2,33 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+/* === ember design tokens === */
 @layer base {
-  :root {
-    --color-primary: #0088CC;
-    --color-primary-dark: #2AABEE;
+  :root,
+  [data-theme='dark'] {
+    --bg: oklch(0.165 0.008 60);
+    --rail: oklch(0.135 0.007 60);
+    --elev: oklch(0.205 0.009 60);
+    --surface: oklch(0.235 0.01 60);
+    --surface-2: oklch(0.285 0.011 58);
+    --bubble-in: oklch(0.255 0.01 58);
+    --bubble-out: oklch(0.31 0.055 52);
+    --bubble-out-text: oklch(0.96 0.006 70);
+    --text: oklch(0.965 0.004 70);
+    --text-dim: oklch(0.74 0.01 68);
+    --text-faint: oklch(0.56 0.01 66);
+    --border: oklch(1 0 0 / 0.08);
+    --status-online: oklch(0.72 0.12 155);
+    --warn: oklch(0.76 0.11 72);
+    --danger: oklch(0.62 0.19 27);
+    --danger-soft: oklch(0.62 0.19 27 / 0.14);
+
+    --accent: #ff7a45;
+    --accent-ink: #ffffff;
+    --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+    --accent-glow: color-mix(in oklab, var(--accent) 40%, transparent);
   }
 
-  .dark {
-    --color-primary: #2AABEE;
-    --color-primary-dark: #0088CC;
+  [data-theme='light'] {
+    --bg: oklch(0.975 0.006 75);
+    --rail: oklch(0.225 0.012 60);
+    --elev: oklch(1 0 0);
+    --surface: oklch(0.945 0.009 75);
+    --surface-2: oklch(0.91 0.01 73);
+    --bubble-in: oklch(1 0 0);
+    --bubble-out: oklch(0.92 0.048 62);
+    --bubble-out-text: oklch(0.225 0.012 60);
+    --text: oklch(0.225 0.012 60);
+    --text-dim: oklch(0.5 0.012 60);
+    --text-faint: oklch(0.66 0.01 60);
+    --border: oklch(0.2 0.01 60 / 0.1);
+    --danger-soft: oklch(0.62 0.19 27 / 0.1);
   }
-}
 
-@layer base {
   * {
-    @apply border-gray-200;
-  }
-
-  .dark * {
-    @apply border-gray-700;
+    border-color: var(--border);
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
-  }
-
-  .dark body {
-    @apply bg-gray-900 text-gray-100;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', system-ui, sans-serif;
   }
 }
 
@@ -43,19 +67,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  @apply bg-gray-600;
+  background: var(--surface-2);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500;
+  background: var(--text-faint);
 }
 
 /* Safe area insets for mobile notches/navigation */
@@ -83,7 +100,7 @@
 
 /* Animation utilities */
 .animate-in {
-  animation: animateIn 0.3s ease-in-out;
+  animation: animateIn 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes animateIn {
@@ -94,5 +111,14 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Pulse"
+    "name": "ember"
   },
   "nav": {
     "chats": "Chats",
@@ -133,7 +133,7 @@
     "copyCode": "Copy code",
     "copied": "Copied!",
     "addTitle": "Add contact",
-    "pasteCode": "Paste a pulse:// code here…",
+    "pasteCode": "Paste an ember:// code here…",
     "scanQr": "Scan QR code",
     "cameraUnavailable": "Camera unavailable",
     "added": "{{name}} added to contacts"
@@ -211,11 +211,11 @@
     "loadFailed": "Failed to load data"
   },
   "theme": {
-    "telegram": "Telegram",
-    "green": "Green",
-    "purple": "Purple",
-    "orange": "Orange",
-    "red": "Red"
+    "telegram": "sky",
+    "green": "mint",
+    "purple": "violet",
+    "orange": "ember",
+    "red": "rose"
   },
   "updater": {
     "available": "Pulse {{version}} is available. Download and install?",

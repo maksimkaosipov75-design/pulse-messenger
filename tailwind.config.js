@@ -5,6 +5,27 @@ export default {
   theme: {
     extend: {
       colors: {
+        // ember semantic tokens (CSS variables from globals.css)
+        bg: 'var(--bg)',
+        rail: 'var(--rail)',
+        elev: 'var(--elev)',
+        surface: { DEFAULT: 'var(--surface)', 2: 'var(--surface-2)' },
+        ink: { DEFAULT: 'var(--text)', dim: 'var(--text-dim)', faint: 'var(--text-faint)' },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          soft: 'var(--accent-soft)',
+          glow: 'var(--accent-glow)',
+          ink: 'var(--accent-ink)',
+        },
+        bubble: {
+          in: 'var(--bubble-in)',
+          out: 'var(--bubble-out)',
+          'out-ink': 'var(--bubble-out-text)',
+        },
+        online: 'var(--status-online)',
+        warn: 'var(--warn)',
+        danger: { DEFAULT: 'var(--danger)', soft: 'var(--danger-soft)' },
+        // legacy palette, being phased out
         pulse: {
           50: 'var(--pulse-50)',
           100: 'var(--pulse-100)',
@@ -17,6 +38,16 @@ export default {
           800: 'var(--pulse-800)',
           900: 'var(--pulse-900)',
         },
+      },
+      fontFamily: {
+        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      borderRadius: {
+        'em-sm': '10px',
+        'em-md': '16px',
+        'em-lg': '22px',
+        'em-xl': '30px',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',

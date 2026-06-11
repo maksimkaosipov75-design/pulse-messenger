@@ -638,7 +638,9 @@ struct ContactCode {
     addr: Option<String>,
 }
 
-const CONTACT_CODE_PREFIX: &str = "pulse://contact?d=";
+const CONTACT_CODE_PREFIX: &str = "ember://contact?d=";
+/// Pre-rebrand scheme, accepted as an alias until v2.2
+const CONTACT_CODE_PREFIX_LEGACY: &str = "pulse://contact?d=";
 
 #[tauri::command]
 fn get_my_contact_code(
@@ -685,7 +687,10 @@ fn add_contact_by_code(
 ) -> Result<Contact, String> {
     use base64::Engine;
     let trimmed = code.trim();
-    let b64 = trimmed.strip_prefix(CONTACT_CODE_PREFIX).unwrap_or(trimmed);
+    let b64 = trimmed
+        .strip_prefix(CONTACT_CODE_PREFIX)
+        .or_else(|| trimmed.strip_prefix(CONTACT_CODE_PREFIX_LEGACY))
+        .unwrap_or(trimmed);
     let json = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(b64)
         .map_err(|_| "Invalid code format")?;

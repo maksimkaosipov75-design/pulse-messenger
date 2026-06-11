@@ -6,12 +6,22 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
+/** ember accents; keys keep the legacy settingsStore values */
+const accents: Record<string, string> = {
+  orange: '#FF7A45', // ember — фирменный
+  telegram: '#2AABEE', // sky
+  purple: '#7C5CFF', // violet
+  green: '#19C37D', // mint
+  red: '#F25F8E', // rose
+};
+
+/** Legacy pulse-* palette for screens not yet migrated to tokens */
 const themePalettes: Record<string, { h: number; s: number; l: number }> = {
   telegram: { h: 198, s: 100, l: 40 },
   green: { h: 122, s: 39, l: 49 },
   purple: { h: 262, s: 100, l: 65 },
-  orange: { h: 36, s: 100, l: 50 },
-  red: { h: 4, s: 75, l: 55 },
+  orange: { h: 18, s: 100, l: 63 },
+  red: { h: 340, s: 85, l: 66 },
 };
 
 function generatePalette(base: { h: number; s: number; l: number }) {
@@ -33,15 +43,13 @@ export function ThemeProvider({ theme, isDark, children }: ThemeProviderProps) {
   useEffect(() => {
     const root = document.documentElement;
 
-    // Apply dark mode
-    if (isDark) {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
+    // ember tokens switch on data-theme
+    root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    root.classList.toggle('dark', isDark);
+    root.style.setProperty('--accent', accents[theme] || accents.orange);
 
-    // Apply theme colors
-    const base = themePalettes[theme] || themePalettes.telegram;
+    // Legacy pulse-* palette for not-yet-migrated screens
+    const base = themePalettes[theme] || themePalettes.orange;
     const palette = generatePalette(base);
     for (const [shade, value] of Object.entries(palette)) {
       root.style.setProperty(`--pulse-${shade}`, `hsl(${value})`);
