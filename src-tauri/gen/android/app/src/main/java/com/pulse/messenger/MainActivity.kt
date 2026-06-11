@@ -10,6 +10,9 @@ import androidx.core.content.ContextCompat
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // ember window chrome: bars must match the app background
+    window.statusBarColor = android.graphics.Color.parseColor("#1B1916")
+    window.navigationBarColor = android.graphics.Color.parseColor("#1B1916")
     requestNeededPermissions()
   }
 

@@ -14,7 +14,7 @@ function MonoField({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-[11.5px] text-ink-faint mb-1">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 text-[11.5px] font-mono text-ink-dim bg-surface px-2.5 py-1.5 rounded-em-sm truncate">
+        <code className="flex-1 min-w-0 text-[11.5px] font-mono text-ink-dim bg-surface px-2.5 py-1.5 rounded-em-sm truncate">
           {value}
         </code>
         <button
@@ -47,7 +47,7 @@ export function ConnectionStatus() {
 
   return (
     <div>
-      <div className="grid md:grid-cols-2 gap-x-5 gap-y-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-2.5 min-w-0">
         <div className="space-y-2.5">
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-[13.5px] text-ink-dim">{t('status.statusLabel')}</span>

@@ -57,7 +57,7 @@ export function SettingsPage() {
       <div className="w-full px-4 md:px-8 py-5 md:py-7">
         <h1 className="text-[22px] font-extrabold tracking-tight mb-4 md:mb-5">{t('settings.title')}</h1>
 
-        <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-[14px] items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-[14px] items-start">
           {/* Профиль */}
           <Card icon={<User size={16} />} title={t('settings.profile')}>
             <div className="flex items-center gap-[13px]">
