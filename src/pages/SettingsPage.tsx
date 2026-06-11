@@ -53,11 +53,11 @@ export function SettingsPage() {
     .trim();
 
   return (
-    <div className="h-full overflow-y-auto bg-bg">
-      <div className="max-w-[880px] mx-auto px-6 py-7">
+    <div className="flex-1 h-full w-full overflow-y-auto bg-bg">
+      <div className="w-full px-8 py-7">
         <h1 className="text-[22px] font-extrabold tracking-tight mb-5">{t('settings.title')}</h1>
 
-        <div className="grid md:grid-cols-2 gap-[14px] items-start">
+        <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-[14px] items-start">
           {/* Профиль */}
           <Card icon={<User size={16} />} title={t('settings.profile')}>
             <div className="flex items-center gap-[13px]">
@@ -124,9 +124,9 @@ export function SettingsPage() {
             </Row>
             <Row label={t('settings.language')}>
               <select
-                value={settings.language}
+                value={settings.language || 'ru'}
                 onChange={(e) => updateSettings({ language: e.target.value })}
-                className="bg-surface px-2.5 py-1 rounded-em-sm text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-accent"
+                className="bg-surface text-ink min-w-[110px] px-2.5 py-1 rounded-em-sm text-[13.5px] font-bold focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option value="ru">Русский</option>
                 <option value="en">English</option>
@@ -195,14 +195,14 @@ export function SettingsPage() {
           </Card>
 
           {/* Сеть — на всю ширину */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 2xl:col-span-3">
             <Card icon={<Wifi size={16} />} title={t('settings.network')}>
               <ConnectionStatus />
             </Card>
           </div>
 
           {/* Аккаунт */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 2xl:col-span-3">
             <Card icon={<LogOut size={16} />} title={t('settings.account')}>
               <div className="flex flex-wrap items-center gap-2">
                 <button
