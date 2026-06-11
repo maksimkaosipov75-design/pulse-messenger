@@ -78,18 +78,18 @@ export function ConnectionStatus() {
 
       {error && <p className="text-xs text-danger mt-3">{error}</p>}
 
-      <div className="flex items-center gap-2 mt-4">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 mt-4">
         <input
           value={connectAddr}
           onChange={(e) => setConnectAddr(e.target.value)}
           placeholder={t('status.addressPlaceholder')}
-          className="flex-1 text-[12px] font-mono px-3 py-2 bg-surface rounded-em-sm placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
+          className="w-full md:flex-1 min-w-0 text-[12px] font-mono px-3 py-2 bg-surface rounded-em-sm placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
           onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
         />
         <button
           onClick={handleConnect}
           disabled={!connectAddr.trim()}
-          className="px-3.5 py-2 text-[12.5px] font-bold bg-surface rounded-em-sm hover:bg-surface-2 disabled:opacity-40 transition-colors"
+          className="px-3.5 py-2 text-[12.5px] font-bold bg-surface rounded-em-sm hover:bg-surface-2 disabled:opacity-40 transition-colors whitespace-nowrap"
         >
           {t('status.connectToPeer')}
         </button>

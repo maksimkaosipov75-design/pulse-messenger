@@ -68,7 +68,7 @@ export function ContactsPage() {
   };
 
   return (
-    <div className="flex-1 h-full w-full overflow-y-auto bg-bg">
+    <div className="flex-1 h-full w-full overflow-y-auto overflow-x-hidden bg-bg">
       <div className="w-full px-4 md:px-8 py-5 md:py-7">
         {/* Header: title + counter + actions */}
         <div className="flex items-center gap-3 mb-5">
