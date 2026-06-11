@@ -10,7 +10,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Paperclip, Phone, Video, ArrowLeft, Trash2, Mic, Square, Users, Lock, Check, CheckCheck, Clock } from 'lucide-react';
 import { Message, MessageType } from '@/types';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { enUS, ru } from 'date-fns/locale';
 import { FileMessage } from './FileMessage';
 import { GroupSettingsPanel } from '@/components/group/GroupSettingsPanel';
@@ -24,7 +24,7 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
   const { selectAndSendFile } = useFileStore();
   const { startCall } = useCallStore();
   const { members, loadMembers } = useGroupStore();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [inputValue, setInputValue] = useState('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: Message } | null>(null);
@@ -263,23 +263,56 @@ export function ChatView({ onBack }: { onBack?: () => void } = {}) {
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-2"
+        className="flex-1 overflow-y-auto p-4"
       >
         {isLoadingMessages && (
           <div className="flex justify-center py-2">
             <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
           </div>
         )}
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            isOwn={message.senderId === user?.id}
-            showSender={currentChat.chatType === 'group'}
-            senderNameMap={memberNameMap}
-            onContextMenu={(e) => handleContextMenu(e, message)}
-          />
-        ))}
+        {messages.length > 0 && (
+          <div className="flex justify-center py-2">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface text-[11px] text-ink-faint">
+              <Lock size={11} /> {t('chat.e2eNotice')}
+            </span>
+          </div>
+        )}
+        {messages.map((message, i) => {
+          const prev = messages[i - 1];
+          const next = messages[i + 1];
+          const newDay =
+            !prev || !isSameDay(new Date(prev.timestamp), new Date(message.timestamp));
+          const lastInGroup =
+            !next ||
+            next.senderId !== message.senderId ||
+            !isSameDay(new Date(next.timestamp), new Date(message.timestamp));
+          const firstInGroup = newDay || !prev || prev.senderId !== message.senderId;
+          const repliedTo = message.replyToId
+            ? messages.find((m) => m.id === message.replyToId)
+            : undefined;
+          return (
+            <div key={message.id}>
+              {newDay && (
+                <div className="flex justify-center py-2">
+                  <span className="px-3 py-0.5 rounded-full bg-surface text-[11px] font-mono text-ink-faint">
+                    {format(new Date(message.timestamp), 'd MMMM', {
+                      locale: i18n.language === 'en' ? enUS : ru,
+                    })}
+                  </span>
+                </div>
+              )}
+              <MessageBubble
+                message={message}
+                isOwn={message.senderId === user?.id}
+                showSender={currentChat.chatType === 'group' && firstInGroup}
+                senderNameMap={memberNameMap}
+                lastInGroup={lastInGroup}
+                repliedTo={repliedTo}
+                onContextMenu={(e) => handleContextMenu(e, message)}
+              />
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -406,12 +439,16 @@ function MessageBubble({
   onContextMenu,
   showSender,
   senderNameMap,
+  lastInGroup = true,
+  repliedTo,
 }: {
   message: Message;
   isOwn: boolean;
   onContextMenu: (e: React.MouseEvent) => void;
   showSender?: boolean;
   senderNameMap?: Record<string, string>;
+  lastInGroup?: boolean;
+  repliedTo?: Message;
 }) {
   const { t, i18n } = useTranslation();
   const isMedia = MEDIA_TYPES.includes(message.messageType);
@@ -422,15 +459,22 @@ function MessageBubble({
     : 0;
 
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${lastInGroup ? 'mb-2' : 'mb-[3px]'}`}>
       <div
         onContextMenu={onContextMenu}
         className={`max-w-[78%] md:max-w-[70%] rounded-[18px] cursor-default ${
           isOwn
-            ? 'bg-bubble-out text-bubble-out-ink rounded-br-[6px]'
-            : 'bg-bubble-in text-ink rounded-bl-[6px]'
+            ? `bg-bubble-out text-bubble-out-ink ${lastInGroup ? 'rounded-br-[6px]' : ''}`
+            : `bg-bubble-in text-ink ${lastInGroup ? 'rounded-bl-[6px]' : ''}`
         } ${isMedia ? 'p-1' : 'px-4 py-2'}`}
       >
+        {repliedTo && (
+          <div className="mb-1.5 pl-2.5 pr-2 py-1 rounded-em-sm bg-black/10 border-l-[2.5px] border-accent">
+            <p className="text-[12px] opacity-80 truncate">
+              {repliedTo.content || t('chat.msgFile')}
+            </p>
+          </div>
+        )}
         {showSender && !isOwn && message.senderId && (
           <p
             className="text-xs font-bold mb-0.5 px-1"

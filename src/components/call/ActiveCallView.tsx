@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useCallStore } from '@/stores/callStore';
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Volume2, VolumeX } from 'lucide-react';
+import { Phone, Mic, MicOff, Video, VideoOff, Volume2, VolumeX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 function formatDuration(seconds: number): string {
@@ -59,21 +59,29 @@ export function ActiveCallView() {
       {/* Header info */}
       <div className="relative z-10 flex flex-col items-center pt-16">
         {!isVideo && (
-          <div className="w-24 h-24 rounded-full bg-violet-600 flex items-center justify-center mb-4">
-            <span className="text-4xl font-bold text-white">
+          <div className="em-rings w-32 h-32 rounded-full bg-surface-2 flex items-center justify-center mb-6">
+            <span className="text-5xl font-extrabold text-ink">
               {callInfo.peerName[0]?.toUpperCase() || '?'}
             </span>
           </div>
         )}
-        <h2 className="text-xl font-semibold text-white mb-1">{callInfo.peerName}</h2>
-        <p className="text-sm text-ink-faint">
+        <h2 className="text-xl font-bold text-white mb-1">{callInfo.peerName}</h2>
+        <p className="text-sm font-mono text-ink-faint">
           {callState === 'connecting' ? t('call.connecting') : formatDuration(callDuration)}
         </p>
+        <div className="flex gap-1.5 mt-2">
+          <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10.5px] font-mono text-white/70">
+            e2e
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10.5px] font-mono text-white/70">
+            p2p · {t('call.direct')}
+          </span>
+        </div>
       </div>
 
       {/* Local video overlay (PiP) */}
       {isVideo && (
-        <div className="absolute top-4 right-4 w-32 h-24 rounded-em-sm overflow-hidden border-2 border-white/20 shadow-lg z-20">
+        <div className="absolute top-4 right-4 w-[216px] h-[134px] rounded-em-md overflow-hidden border-2 border-white/20 shadow-lg z-20">
           <video
             ref={localVideoRef}
             autoPlay
@@ -94,7 +102,7 @@ export function ActiveCallView() {
           <button
             onClick={toggleMute}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-              isMuted ? 'bg-danger' : 'bg-white/20 hover:bg-white/30'
+              isMuted ? 'bg-danger' : 'bg-white/15 hover:bg-white/25 backdrop-blur'
             }`}
           >
             {isMuted ? <MicOff size={24} className="text-white" /> : <Mic size={24} className="text-white" />}
@@ -104,7 +112,7 @@ export function ActiveCallView() {
             <button
               onClick={toggleVideo}
               className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-                isVideoOff ? 'bg-danger' : 'bg-white/20 hover:bg-white/30'
+                isVideoOff ? 'bg-danger' : 'bg-white/15 hover:bg-white/25 backdrop-blur'
               }`}
             >
               {isVideoOff ? <VideoOff size={24} className="text-white" /> : <Video size={24} className="text-white" />}
@@ -114,7 +122,7 @@ export function ActiveCallView() {
           <button
             onClick={toggleSpeaker}
             className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
-              isSpeakerOn ? 'bg-accent' : 'bg-white/20 hover:bg-white/30'
+              isSpeakerOn ? 'bg-accent' : 'bg-white/15 hover:bg-white/25 backdrop-blur'
             }`}
           >
             {isSpeakerOn ? <Volume2 size={24} className="text-white" /> : <VolumeX size={24} className="text-white" />}
@@ -122,9 +130,9 @@ export function ActiveCallView() {
 
           <button
             onClick={() => endCall()}
-            className="w-14 h-14 rounded-full bg-danger hover:brightness-110 flex items-center justify-center transition-colors shadow-lg shadow-red-500/30"
+            className="w-14 h-14 rounded-full bg-danger hover:brightness-110 flex items-center justify-center transition-colors shadow-lg shadow-danger/30"
           >
-            <PhoneOff size={24} className="text-white" />
+            <Phone size={24} className="text-white rotate-[135deg]" />
           </button>
         </div>
       </div>

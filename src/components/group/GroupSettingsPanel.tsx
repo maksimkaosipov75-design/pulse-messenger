@@ -47,7 +47,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
 
   const handleCopyInvite = () => {
     if (inviteResult) {
-      navigator.clipboard.writeText(`pulse://invite/${inviteResult.code}`);
+      navigator.clipboard.writeText(`ember://invite/${inviteResult.code}`);
     }
   };
 
@@ -99,8 +99,8 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
 
   const roleIcon = (role: GroupRole) => {
     switch (role) {
-      case 'owner': return <Crown size={14} className="text-yellow-400" />;
-      case 'admin': return <Shield size={14} className="text-blue-400" />;
+      case 'owner': return <Crown size={14} className="text-accent" />;
+      case 'admin': return <Shield size={14} className="text-ink-dim" />;
       default: return null;
     }
   };
@@ -115,7 +115,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
     <div className="h-full flex flex-col bg-elev border-l">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h2 className="text-lg font-semibold text-white">{t('group.settings')}</h2>
+        <h2 className="text-lg font-bold text-ink">{t('group.settings')}</h2>
         <button onClick={onClose} className="p-1 hover:bg-surface rounded">
           <X size={20} className="text-ink-faint" />
         </button>
@@ -123,23 +123,21 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
 
       {/* Group info */}
       <div className="p-4 text-center border-b">
-        <div className="w-16 h-16 rounded-full bg-violet-600 flex items-center justify-center mx-auto mb-2">
-          <Users size={28} className="text-white" />
+        <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center mx-auto mb-2">
+          <Users size={28} className="text-accent" />
         </div>
-        <h3 className="text-white font-semibold">{chat.name || t('chatList.group')}</h3>
+        <h3 className="text-ink font-bold">{chat.name || t('chatList.group')}</h3>
         <p className="text-sm text-ink-faint">{t('chat.members', { count: groupMembers.length })}</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b">
+      {/* Segment tabs */}
+      <div className="flex gap-1 p-2 m-3 mb-1 bg-surface rounded-em-md">
         {tabs.map((tabItem) => (
           <button
             key={tabItem.id}
             onClick={() => setTab(tabItem.id)}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              tab === tabItem.id
-                ? 'text-violet-400 border-b-2 border-violet-400'
-                : 'text-ink-faint hover:text-gray-300'
+            className={`flex-1 py-1.5 rounded-em-sm text-[13px] font-semibold transition-colors ${
+              tab === tabItem.id ? 'bg-accent-soft text-accent' : 'text-ink-dim hover:text-ink'
             }`}
           >
             {tabItem.label}
@@ -157,10 +155,10 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                 onClick={() => setShowAddMember(true)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-em-sm hover:bg-elev transition-colors mb-2"
               >
-                <div className="w-9 h-9 rounded-full bg-violet-600 flex items-center justify-center">
-                  <UserPlus size={16} className="text-white" />
+                <div className="w-9 h-9 rounded-full bg-accent-soft flex items-center justify-center">
+                  <UserPlus size={16} className="text-accent" />
                 </div>
-                <span className="text-violet-400 text-sm font-medium">{t('group.addMember')}</span>
+                <span className="text-accent text-sm font-semibold">{t('group.addMember')}</span>
               </button>
             )}
 
@@ -170,24 +168,24 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                   value={newMemberId}
                   onChange={(e) => setNewMemberId(e.target.value)}
                   placeholder={t('group.userId')}
-                  className="w-full px-3 py-1.5 bg-surface-2 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  className="w-full px-3 py-1.5 bg-surface-2 rounded-em-sm text-sm text-ink mb-2 focus:outline-none focus:ring-1 focus:ring-accent"
                 />
                 <input
                   value={newMemberName}
                   onChange={(e) => setNewMemberName(e.target.value)}
                   placeholder={t('group.nameOptional')}
-                  className="w-full px-3 py-1.5 bg-surface-2 rounded text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  className="w-full px-3 py-1.5 bg-surface-2 rounded-em-sm text-sm text-ink mb-2 focus:outline-none focus:ring-1 focus:ring-accent"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddMember}
-                    className="flex-1 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded transition-colors"
+                    className="flex-1 py-1.5 bg-accent hover:brightness-110 text-accent-ink text-sm rounded transition-colors"
                   >
                     {t('group.add')}
                   </button>
                   <button
                     onClick={() => setShowAddMember(false)}
-                    className="px-3 py-1.5 text-ink-faint text-sm hover:text-white"
+                    className="px-3 py-1.5 text-ink-faint text-sm hover:text-ink"
                   >
                     {t('group.cancel')}
                   </button>
@@ -197,15 +195,21 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
 
             {groupMembers.map((member) => (
               <div key={member.userId} className="flex items-center gap-3 px-3 py-2 rounded-em-sm hover:bg-elev transition-colors">
-                <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-sm font-medium text-white">
+                <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-sm font-bold text-ink">
                   {(member.displayName || '?')[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-white truncate">{member.displayName}</span>
+                    <span className="text-sm text-ink font-semibold truncate">{member.displayName}</span>
                     {roleIcon(member.role)}
                   </div>
-                  <span className="text-xs text-ink-faint">{member.role}</span>
+                  <span className={`text-[10.5px] px-1.5 py-px rounded-full font-semibold ${
+                    member.role === 'owner'
+                      ? 'bg-accent-soft text-accent'
+                      : member.role === 'admin'
+                      ? 'bg-surface-2 text-ink-dim'
+                      : 'text-ink-faint'
+                  }`}>{member.role}</span>
                 </div>
 
                 {/* Role change buttons */}
@@ -214,7 +218,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     {member.role === 'member' && (
                       <button
                         onClick={() => handleChangeRole(member.userId, 'admin')}
-                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-blue-400"
+                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-accent"
                         title={t('group.makeAdmin')}
                       >
                         <Shield size={14} />
@@ -223,7 +227,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                     {member.role === 'admin' && isOwner && (
                       <button
                         onClick={() => handleChangeRole(member.userId, 'member')}
-                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-yellow-400"
+                        className="p-1.5 hover:bg-surface rounded text-ink-faint hover:text-warn"
                         title={t('group.demote')}
                       >
                         <ChevronRight size={14} />
@@ -276,7 +280,7 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
             {!isOwner && (
               <button
                 onClick={handleLeave}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-em-sm bg-danger/10 hover:bg-danger/20 text-danger transition-colors mt-6"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-em-sm bg-danger-soft hover:brightness-110 text-danger transition-colors mt-6"
               >
                 <LogOut size={18} />
                 <span className="text-sm font-medium">{t('group.leaveGroup')}</span>
@@ -293,22 +297,22 @@ export function GroupSettingsPanel({ chat, onClose }: GroupSettingsPanelProps) {
                 {!inviteResult ? (
                   <button
                     onClick={handleCreateInvite}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-em-sm transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-accent hover:brightness-110 text-accent-ink rounded-em-sm transition-colors"
                   >
                     <Link size={18} />
                     <span className="text-sm font-medium">{t('group.createInvite')}</span>
                   </button>
                 ) : (
                   <div className="space-y-3">
-                    <div className="p-3 bg-elev rounded-em-sm">
+                    <div className="p-3 bg-surface rounded-em-md border">
                       <p className="text-xs text-ink-faint mb-1">{t('group.inviteLink')}</p>
-                      <p className="text-sm text-white font-mono break-all">
-                        pulse://invite/{inviteResult.code}
+                      <p className="text-sm text-ink font-mono break-all">
+                        ember://invite/{inviteResult.code}
                       </p>
                     </div>
                     <button
                       onClick={handleCopyInvite}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface-2 hover:bg-surface-2 text-white rounded-em-sm transition-colors"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-surface-2 hover:brightness-110 text-ink rounded-em-sm transition-colors"
                     >
                       <Copy size={16} />
                       <span className="text-sm">{t('group.copy')}</span>

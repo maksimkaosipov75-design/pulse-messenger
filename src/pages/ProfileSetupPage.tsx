@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUserStore } from '@/stores/userStore';
-import { Flame, LogIn } from 'lucide-react';
+import { Flame, LogIn, KeyRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { invoke } from '@tauri-apps/api/core';
+import { Identicon } from '@/components/Identicon';
 
 export function ProfileSetupPage() {
   const { t } = useTranslation();
@@ -11,6 +13,15 @@ export function ProfileSetupPage() {
   const [error, setError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [pubKey, setPubKey] = useState('');
+
+  // Ключи уже сгенерированы локально при первом запуске — показываем
+  // их identicon в карточке онбординга
+  useEffect(() => {
+    invoke<string>('get_public_key_hex')
+      .then(setPubKey)
+      .catch(() => {});
+  }, []);
 
   // Logged-out state with an existing profile: offer to log back in
   if (isLoggedOut && user) {
@@ -92,9 +103,28 @@ export function ProfileSetupPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-bg">
+    <div className="flex h-screen bg-bg">
+      {/* Бренд-половина (десктоп) */}
+      <div className="hidden md:flex flex-1 bg-rail flex-col items-center justify-center gap-6">
+        <div className="em-rings w-24 h-24 rounded-em-xl bg-accent-soft flex items-center justify-center">
+          <Flame size={48} className="text-accent" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold tracking-tight text-white">ember</h2>
+          <p className="mt-2 text-sm text-white/55 max-w-[260px]">{t('profile.tagline')}</p>
+        </div>
+        <div className="flex gap-2">
+          {['p2p', 'e2e', 'local-first'].map((chip) => (
+            <span key={chip} className="px-2.5 py-1 rounded-full bg-white/10 text-[11px] font-mono text-white/70">
+              {chip}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center">
       <div className="w-full max-w-md p-8">
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 md:hidden">
           <div className="w-20 h-20 mx-auto mb-4 bg-accent-soft rounded-em-xl flex items-center justify-center">
             <Flame size={40} className="text-accent" />
           </div>
@@ -104,6 +134,10 @@ export function ProfileSetupPage() {
           <p className="mt-2 text-ink-dim">
             {t('profile.setupDesc')}
           </p>
+        </div>
+        <div className="hidden md:block mb-8">
+          <h1 className="text-2xl font-extrabold text-ink">{t('profile.welcome')}</h1>
+          <p className="mt-2 text-ink-dim">{t('profile.setupDesc')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -139,11 +173,24 @@ export function ProfileSetupPage() {
           <button
             type="submit"
             disabled={isCreating}
-            className="w-full py-2.5 bg-accent text-accent-ink rounded-em-sm font-medium hover:brightness-110 disabled:opacity-50 transition-colors"
+            className="w-full py-2.5 bg-accent text-accent-ink rounded-em-md font-bold hover:brightness-110 disabled:opacity-50 transition-colors"
           >
             {isCreating ? t('profile.creating') : t('profile.create')}
           </button>
+
+          {pubKey && (
+            <div className="flex items-center gap-3 p-3 bg-elev border rounded-em-md">
+              <Identicon value={pubKey} size={40} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold flex items-center gap-1.5">
+                  <KeyRound size={13} className="text-accent" /> {t('profile.keysLocal')}
+                </p>
+                <code className="text-[11px] font-mono text-ink-faint">{pubKey.slice(0, 16)}</code>
+              </div>
+            </div>
+          )}
         </form>
+      </div>
       </div>
     </div>
   );

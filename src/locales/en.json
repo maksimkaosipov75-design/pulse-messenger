@@ -42,7 +42,8 @@
     "queuedOffline": "Message will be sent when the peer is online",
     "queueFlushed": "Sent {{count}} queued message(s)",
     "offline": "offline",
-    "queuedCount": "queued: {{count}}"
+    "queuedCount": "queued: {{count}}",
+    "e2eNotice": "Messages are end-to-end encrypted"
   },
   "chatList": {
     "newChat": "New chat",
@@ -155,7 +156,9 @@
     "loginAs": "Log in as {{name}}",
     "resetAccount": "Delete account and start over",
     "resetWarning": "All chats, contacts and keys will be permanently deleted. This cannot be undone.",
-    "resetConfirm": "Delete everything"
+    "resetConfirm": "Delete everything",
+    "tagline": "Serverless messenger: your keys, your devices, your network.",
+    "keysLocal": "Keys generated locally"
   },
   "search": {
     "placeholder": "Search messages...",
@@ -191,7 +194,8 @@
     "end": "End call",
     "incomingAudio": "Incoming audio call...",
     "incomingVideo": "Incoming video call...",
-    "unsupported": "Calls are not supported here: this system WebKit build lacks WebRTC"
+    "unsupported": "Calls are not supported here: this system WebKit build lacks WebRTC",
+    "direct": "direct"
   },
   "file": {
     "download": "Download",

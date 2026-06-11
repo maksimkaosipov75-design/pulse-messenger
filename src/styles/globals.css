@@ -122,3 +122,24 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ember call pulse rings */
+.em-rings {
+  position: relative;
+}
+.em-rings::before,
+.em-rings::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--accent-glow);
+  animation: emRing 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.em-rings::after {
+  animation-delay: 1.1s;
+}
+@keyframes emRing {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
