@@ -69,7 +69,7 @@ export function ContactsPage() {
 
   return (
     <div className="flex-1 h-full w-full overflow-y-auto bg-bg">
-      <div className="w-full px-8 py-7">
+      <div className="w-full px-4 md:px-8 py-5 md:py-7">
         {/* Header: title + counter + actions */}
         <div className="flex items-center gap-3 mb-5">
           <h1 className="text-[22px] font-extrabold tracking-tight">{t('contacts.title')}</h1>
@@ -79,13 +79,13 @@ export function ContactsPage() {
           <div className="flex-1" />
           <button
             onClick={() => setShowMyCode(true)}
-            className="flex items-center gap-[7px] px-3.5 py-2 text-[13.5px] font-bold bg-surface rounded-em-md hover:bg-surface-2 transition-colors"
+            className="inline-flex items-center justify-center leading-none gap-[7px] px-3.5 py-2 text-[13.5px] font-bold bg-surface rounded-em-md hover:bg-surface-2 transition-colors"
           >
             <QrCode size={15} /> {t('contacts.myCode')}
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-[7px] px-3.5 py-2 text-[13.5px] font-extrabold bg-accent text-accent-ink rounded-em-md hover:brightness-110 transition"
+            className="inline-flex items-center justify-center leading-none gap-[7px] px-3.5 py-2 text-[13.5px] font-extrabold bg-accent text-accent-ink rounded-em-md hover:brightness-110 transition"
           >
             <UserPlus size={15} /> {t('contacts.add')}
           </button>
@@ -186,7 +186,7 @@ function ContactItem({
       <div className="flex items-center gap-0.5 flex-shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         <button
           onClick={onStartChat}
-          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
+          className="w-10 h-10 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-em-sm hover:bg-surface-2 transition-colors"
           title={t('contacts.startChat')}
         >
           <MessageCircle size={17} className="text-ink-dim" />
@@ -194,21 +194,21 @@ function ContactItem({
         <button
           onClick={onCall}
           disabled={!online}
-          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors disabled:opacity-30"
+          className="w-10 h-10 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-em-sm hover:bg-surface-2 transition-colors disabled:opacity-30"
           title={t('chat.audioCall')}
         >
           <Phone size={17} className="text-ink-dim" />
         </button>
         <button
           onClick={() => onBlock(!contact.isBlocked)}
-          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
+          className="w-10 h-10 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-em-sm hover:bg-surface-2 transition-colors"
           title={contact.isBlocked ? t('contacts.unblock') : t('contacts.block')}
         >
           <Ban size={17} className={contact.isBlocked ? 'text-danger' : 'text-ink-dim'} />
         </button>
         <button
           onClick={onRemove}
-          className="p-2 rounded-em-sm hover:bg-surface-2 transition-colors"
+          className="w-10 h-10 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-em-sm hover:bg-surface-2 transition-colors"
           title={t('contacts.remove')}
         >
           <Trash2 size={17} className="text-ink-dim" />

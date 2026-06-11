@@ -54,10 +54,10 @@ export function SettingsPage() {
 
   return (
     <div className="flex-1 h-full w-full overflow-y-auto bg-bg">
-      <div className="w-full px-8 py-7">
-        <h1 className="text-[22px] font-extrabold tracking-tight mb-5">{t('settings.title')}</h1>
+      <div className="w-full px-4 md:px-8 py-5 md:py-7">
+        <h1 className="text-[22px] font-extrabold tracking-tight mb-4 md:mb-5">{t('settings.title')}</h1>
 
-        <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-[14px] items-start">
+        <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-[14px] items-start">
           {/* Профиль */}
           <Card icon={<User size={16} />} title={t('settings.profile')}>
             <div className="flex items-center gap-[13px]">
@@ -256,7 +256,7 @@ export function SettingsPage() {
 
 function Card({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <div className="bg-elev border rounded-em-lg p-4">
+    <div className="bg-elev border rounded-em-lg p-3.5 md:p-4">
       <div className="flex items-center gap-[9px] mb-3.5">
         <span className="w-7 h-7 rounded-em-sm bg-accent-soft text-accent flex items-center justify-center">
           {icon}
